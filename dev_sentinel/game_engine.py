@@ -1,0 +1,639 @@
+from collections import deque
+from random import choice
+from interfaces import CommandResult, IBotCommand
+
+
+class GameMoveTool(IBotCommand):
+    @property
+    def name(self) -> str:
+        return "calculate_move"
+
+    def execute(self, data: dict, **kwargs) -> CommandResult:
+        """Calcula el movimiento óptimo aplicando:
+        DEFENSIVA:
+        1. Parser ASCII que reconstruye la secuencia real del cuerpo.
+        2. Bloqueo estricto de giros de 180°.
+        3. Prevención de colisiones contra pared y cuerpo propio.
+        4. Prevención de colisiones por cruce de cabezas (Head-to-Head).
+        5. Simulación de espacio seguro tras comer comida.
+        6. Algoritmos BFS y Flood Fill para supervivencia extrema.
+        7. Heurística de pegado a la pared como respaldo seguro.
+        
+        OFENSIVA (si eres más grande que el enemigo):
+        8. Perseguir y comer la cola del enemigo para obtener puntos.
+        
+        SUBSISTENCIA:
+        9. Buscar comida con BFS cuando no hay oportunidades ofensivas.
+        """
+        board_raw = data.get("board", {})
+        game_id = data.get("game_id")
+        turn_token = data.get("turn_token")
+        side = data.get("side", "A")
+
+        if isinstance(board_raw, str):
+            board_info = self._parse_ascii_board(board_raw, side)
+        else:
+            board_info = board_raw
+
+        # CRÍTICO: Usar rows/cols del servidor en lugar de calcular del tablero
+        # Esto evita mismatches si el tablero ASCII tiene spacing inconsistente
+        cols = data.get("cols")  # Ancho del servidor
+        rows = data.get("rows")  # Alto del servidor
+        
+        grid_width = cols if cols is not None else board_info.get("width", 15)
+        grid_height = rows if rows is not None else board_info.get("height", 15)
+        my_body_list = board_info.get("my_body", [])
+        enemy_body_list = board_info.get("enemy_body", [])
+        foods = board_info.get("foods", [])
+        food_positions = set(tuple(p) for p in foods)
+
+        if not my_body_list:
+            return CommandResult(
+                success=True,
+                output={
+                    "game_id": game_id,
+                    "turn_token": turn_token,
+                    "direction": "RIGHT",
+                    "row": 0,
+                    "col": 0,
+                },
+                metadata={"strategy": "no_body_found"},
+            )
+
+        my_head = tuple(my_body_list[0])
+        my_tail = tuple(my_body_list[-1]) if len(my_body_list) > 0 else None
+        enemy_head = (
+            tuple(enemy_body_list[0]) if len(enemy_body_list) > 0 else None
+        )
+
+        # Regla 1: Liberación dinámica de colas
+        my_obstacles = (
+            set(tuple(p) for p in my_body_list[:-1])
+            if len(my_body_list) > 1
+            else set()
+        )
+        enemy_obstacles = (
+            set(tuple(p) for p in enemy_body_list[:-1])
+            if len(enemy_body_list) > 1
+            else set()
+        )
+        obstacles = my_obstacles | enemy_obstacles
+
+        # Regla 2: Zonas de peligro por choque frontal contra la cabeza enemiga
+        enemy_danger_zones = set()
+        if enemy_head:
+            ex, ey = enemy_head
+            for nx, ny in [
+                (ex + 1, ey),
+                (ex - 1, ey),
+                (ex, ey + 1),
+                (ex, ey - 1),
+            ]:
+                if 0 <= nx < grid_width and 0 <= ny < grid_height:
+                    # Si la serpiente enemiga es de igual o mayor tamaño, evitamos casillas en disputa
+                    if len(enemy_body_list) >= len(my_body_list):
+                        enemy_danger_zones.add((nx, ny))
+
+        # Regla 3: Bloqueo de giros de 180°
+        forbidden_dir = None
+        if len(my_body_list) >= 2:
+            hx, hy = my_body_list[0]
+            nx, ny = my_body_list[1]
+            if hx > nx:
+                forbidden_dir = "LEFT"
+            elif hx < nx:
+                forbidden_dir = "RIGHT"
+            elif hy > ny:
+                forbidden_dir = "UP"
+            elif hy < ny:
+                forbidden_dir = "DOWN"
+
+        directions = {
+            "UP": (my_head[0], my_head[1] - 1),
+            "DOWN": (my_head[0], my_head[1] + 1),
+            "LEFT": (my_head[0] - 1, my_head[1]),
+            "RIGHT": (my_head[0] + 1, my_head[1]),
+        }
+
+        # Step 1: Filtrar movimientos físicamente válidos
+        valid_moves = {}
+        for move_name, target in directions.items():
+            if move_name == forbidden_dir:
+                continue
+            if 0 <= target[0] < grid_width and 0 <= target[1] < grid_height:
+                is_tail_move = my_tail is not None and target == my_tail
+                if target not in obstacles and not (
+                    is_tail_move and target in food_positions
+                ):
+                    valid_moves[move_name] = target
+
+        if not valid_moves:
+            # Plan de emergencia si no hay opciones libres de obstáculos
+            for move_name, target in directions.items():
+                if 0 <= target[0] < grid_width and 0 <= target[1] < grid_height:
+                    is_tail_move = my_tail is not None and target == my_tail
+                    if target not in obstacles and not (
+                        is_tail_move and target in food_positions
+                    ):
+                        valid_moves[move_name] = target
+
+        if not valid_moves:
+            fallback = choice(["UP", "DOWN", "LEFT", "RIGHT"])
+            return CommandResult(
+                success=True,
+                output={
+                    "game_id": game_id,
+                    "turn_token": turn_token,
+                    "direction": fallback,
+                    "row": 0,
+                    "col": 0,
+                },
+                metadata={"strategy": "no_moves_left_emergency"},
+            )
+
+        # Step 2: Filtrar movimientos por supervivencia (Flood Fill) y evitar zonas enemigas
+        safe_moves = {}
+        for move_name, target in valid_moves.items():
+            # Penalizar casillas que el rival pueda pisar en el mismo turno
+            if target in enemy_danger_zones and len(valid_moves) > 1:
+                continue
+
+            next_obstacles = set(obstacles)
+            growing = target in food_positions
+            if growing and my_tail is not None:
+                next_obstacles.add(my_tail)
+
+            available_space = self._flood_fill(
+                target, next_obstacles, grid_width, grid_height
+            )
+            required_space = len(my_body_list) + (1 if growing else 0)
+            if available_space >= required_space:
+                safe_moves[move_name] = target
+
+        candidates = safe_moves if safe_moves else valid_moves
+
+        # Estrategia por puntuación: combina supervivencia, comida, ataque y trampas
+        strategy_mode = self._get_strategy_mode(
+            len(my_body_list),
+            len(enemy_body_list),
+            len(foods),
+            grid_width,
+            grid_height,
+        )
+        can_eat_enemy = len(my_body_list) > len(enemy_body_list)
+        attack_target = tuple(enemy_body_list[-1]) if can_eat_enemy and enemy_body_list else None
+        closest_food = self._get_closest_food(my_head, foods, obstacles, grid_width, grid_height) if foods else None
+
+        trap_targets = set()
+        trap_move = None
+        if enemy_head:
+            ex, ey = enemy_head
+            for nx, ny in [(ex + 1, ey), (ex - 1, ey), (ex, ey + 1), (ex, ey - 1)]:
+                if 0 <= nx < grid_width and 0 <= ny < grid_height and (nx, ny) not in obstacles:
+                    trap_targets.add((nx, ny))
+            if len(trap_targets) <= 2:
+                trap_move = self._find_intercept_move(
+                    my_head, enemy_head, candidates, obstacles, grid_width, grid_height  # type: ignore
+                )
+
+        scored_moves = {}
+        best_move = None
+        best_score = float("-inf")
+        for move_name, target in candidates.items():
+            next_obstacles = set(obstacles)
+            growing = target in food_positions
+            if growing and my_tail is not None:
+                next_obstacles.add(my_tail)
+
+            space_after_move = self._flood_fill(
+                target, next_obstacles, grid_width, grid_height
+            )
+            required_space = len(my_body_list) + (1 if growing else 0)
+            if space_after_move < required_space:
+                continue
+
+            score = self._score_move(
+                move_name=move_name,
+                target=target,
+                my_head=my_head,
+                enemy_head=enemy_head,
+                enemy_tail=tuple(enemy_body_list[-1]) if enemy_body_list else None,
+                food_positions=food_positions,
+                obstacles=next_obstacles,
+                grid_width=grid_width,
+                grid_height=grid_height,
+                my_body_len=len(my_body_list),
+                enemy_body_len=len(enemy_body_list),
+                is_aggressive=can_eat_enemy,
+                closest_food=closest_food,
+                attack_target=attack_target,
+                trap_targets=trap_targets,
+                enemy_danger_zones=enemy_danger_zones,
+                space_after_move=space_after_move,
+                wall_distance=self._wall_distance(target, grid_width, grid_height),
+                strategy_mode=strategy_mode,
+            )
+            scored_moves[move_name] = score
+            if score > best_score:
+                best_score = score
+                best_move = move_name
+
+        attack_move = None
+        attack_score = float("-inf")
+        if can_eat_enemy and enemy_body_list:
+            enemy_tail = tuple(enemy_body_list[-1])
+            attack_move = self._find_enemy_tail_move(
+                my_head, enemy_tail, candidates, obstacles, grid_width, grid_height
+            )
+            if attack_move and attack_move in scored_moves:
+                attack_score = scored_moves[attack_move] + 80.0
+
+        trap_score = float("-inf")
+        if trap_move and trap_move in scored_moves:
+            trap_score = scored_moves[trap_move] + 40.0
+
+        if attack_move and attack_score >= best_score + 15.0:
+            attack_target_pos = candidates[attack_move]
+            return CommandResult(
+                success=True,
+                output={
+                    "game_id": game_id,
+                    "turn_token": turn_token,
+                    "direction": attack_move,
+                    "row": attack_target_pos[0],
+                    "col": attack_target_pos[1],
+                },
+                metadata={
+                    "strategy": "Attack_Enemy_Tail",
+                    "chosen_move": attack_move,
+                },
+            )
+
+        if trap_move and trap_score >= best_score + 10.0:
+            trap_target_pos = candidates[trap_move]
+            return CommandResult(
+                success=True,
+                output={
+                    "game_id": game_id,
+                    "turn_token": turn_token,
+                    "direction": trap_move,
+                    "row": trap_target_pos[0],
+                    "col": trap_target_pos[1],
+                },
+                metadata={
+                    "strategy": "Corner_Trap_Exploit",
+                    "chosen_move": trap_move,
+                },
+            )
+
+        if not best_move:
+            best_move = choice(list(candidates.keys()))
+
+        best_target_pos = candidates[best_move]
+        return CommandResult(
+            success=True,
+            output={
+                "game_id": game_id,
+                "turn_token": turn_token,
+                "direction": best_move,
+                "row": best_target_pos[0],
+                "col": best_target_pos[1],
+            },
+            metadata={
+                "strategy": f"Scored_{strategy_mode}",
+                "chosen_move": best_move,
+            },
+        )
+
+    def _get_strategy_mode(
+        self,
+        my_body_len: int,
+        enemy_body_len: int,
+        food_count: int,
+        width: int,
+        height: int,
+    ) -> str:
+        if my_body_len >= 8 or my_body_len >= enemy_body_len + 3:
+            return "endgame"
+        if my_body_len > enemy_body_len and food_count <= 2:
+            return "aggressive"
+        if food_count <= 2 or width * height <= 64:
+            return "survival"
+        return "balanced"
+
+    def _score_move(
+        self,
+        move_name: str,
+        target: tuple,
+        my_head: tuple,
+        enemy_head: tuple | None,
+        enemy_tail: tuple | None,
+        food_positions: set,
+        obstacles: set,
+        grid_width: int,
+        grid_height: int,
+        my_body_len: int,
+        enemy_body_len: int,
+        is_aggressive: bool,
+        closest_food: tuple | None,
+        attack_target: tuple | None,
+        trap_targets: set,
+        enemy_danger_zones: set | None = None,
+        space_after_move: int | None = None,
+        wall_distance: int | None = None,
+        strategy_mode: str = "balanced",
+    ) -> float:
+        score = 0.0
+
+        if space_after_move is None:
+            space_after_move = self._flood_fill(
+                target, obstacles, grid_width, grid_height
+            )
+        score += space_after_move * 0.25
+
+        if wall_distance is None:
+            wall_distance = self._wall_distance(target, grid_width, grid_height)
+        score += wall_distance * 0.8
+
+        if closest_food is not None:
+            food_distance = self._bfs_distance(
+                target, closest_food, obstacles, grid_width, grid_height
+            )
+            if food_distance != float("inf"):
+                food_weight = 0.6 if is_aggressive and attack_target is not None else 1.8
+                score += max(0.0, 12.0 - food_distance) * food_weight
+
+        if target in food_positions:
+            score += 35.0
+
+        if is_aggressive and attack_target is not None:
+            score += 500.0
+            if target == attack_target:
+                score += 250.0
+            else:
+                attack_distance = self._bfs_distance(
+                    target, attack_target, obstacles, grid_width, grid_height
+                )
+                if attack_distance != float("inf"):
+                    score += max(0.0, 6.0 - attack_distance) * 40.0
+
+        if trap_targets and target in trap_targets:
+            score += 45.0
+
+        if enemy_head is not None:
+            danger_neighbors = {
+                (enemy_head[0] + 1, enemy_head[1]),
+                (enemy_head[0] - 1, enemy_head[1]),
+                (enemy_head[0], enemy_head[1] + 1),
+                (enemy_head[0], enemy_head[1] - 1),
+            }
+            if target in danger_neighbors or target == enemy_head:
+                score -= 140.0
+
+        if enemy_danger_zones and target in enemy_danger_zones:
+            score -= 120.0
+
+        if strategy_mode == "aggressive":
+            score += 18.0
+        elif strategy_mode == "survival":
+            score += 12.0
+        elif strategy_mode == "endgame":
+            score += 10.0
+
+        return score
+
+    def _parse_ascii_board(self, board_str: str, side: str) -> dict:
+        """Parsea el tablero ASCII ordenando la secuencia real del cuerpo de la serpiente."""
+        lines = [line for line in board_str.split("\n") if line.strip()]
+
+        my_head_char = "A" if side == "A" else "B"
+        my_body_char = "a" if side == "A" else "b"
+        enemy_head_char = "B" if side == "A" else "A"
+        enemy_body_char = "b" if side == "A" else "a"
+
+        my_head = None
+        enemy_head = None
+        raw_my_body = []
+        raw_enemy_body = []
+        foods = []
+
+        height = len(lines)
+        width = 0
+
+        for y, line in enumerate(lines):
+            row = line.strip("|")
+            width = max(width, len(row))
+
+            for x, char in enumerate(row):
+                pos = (x, y)
+                if char == my_head_char:
+                    my_head = pos
+                elif char == my_body_char:
+                    raw_my_body.append(pos)
+                elif char == enemy_head_char:
+                    enemy_head = pos
+                elif char == enemy_body_char:
+                    raw_enemy_body.append(pos)
+                elif char == "*":
+                    foods.append(pos)
+
+        # Ordenar los segmentos del cuerpo desde la cabeza en cadena contigua
+        full_my_body = self._reconstruct_body_chain(my_head, raw_my_body)  # type: ignore
+        full_enemy_body = self._reconstruct_body_chain(
+            enemy_head, raw_enemy_body  # type: ignore
+        )
+
+        return {
+            "width": width,
+            "height": height,
+            "my_body": full_my_body,
+            "enemy_body": full_enemy_body,
+            "foods": foods,
+        }
+
+    def _reconstruct_body_chain(self, head: tuple, body_parts: list) -> list:
+        """Ordena secuencialmente los segmentos del cuerpo conectándolos paso a paso."""
+        if not head:
+            return []
+        chain = [head]
+        unattached = list(body_parts)
+
+        while unattached:
+            curr = chain[-1]
+            cx, cy = curr
+            next_part = None
+
+            # Buscar la parte vecina contigua
+            for part in unattached:
+                px, py = part
+                if abs(px - cx) + abs(py - cy) == 1:
+                    next_part = part
+                    break
+
+            if next_part:
+                chain.append(next_part)
+                unattached.remove(next_part)
+            else:
+                break
+
+        return chain
+
+    def _get_closest_food(
+        self, start: tuple, foods: list, obstacles: set, width: int, height: int
+    ) -> tuple:
+        """Return the closest food as a tuple, using BFS distances.
+
+        Ensure food coordinates are tuples because `_bfs_distance` compares
+        tuple positions; boards may provide lists.
+        """
+        closest_food = None
+        min_dist = float("inf")
+        for food in foods:
+            food_t = tuple(food)
+            dist = self._bfs_distance(start, food_t, obstacles, width, height)
+            if dist < min_dist:
+                min_dist = dist
+                closest_food = food_t
+        return closest_food  # type: ignore
+
+    def _find_intercept_move(
+        self,
+        my_head: tuple,
+        enemy_head: tuple,
+        candidates: dict,
+        obstacles: set,
+        width: int,
+        height: int,
+    ) -> str:
+        if not enemy_head or enemy_head == (-1, -1):
+            return None  # type: ignore
+
+        exits_enemy = 0
+        exits_coords = []
+        ex, ey = enemy_head
+        for nx, ny in [(ex + 1, ey), (ex - 1, ey), (ex, ey + 1), (ex, ey - 1)]:
+            if (
+                0 <= nx < width
+                and 0 <= ny < height
+                and (nx, ny) not in obstacles
+            ):
+                exits_enemy += 1
+                exits_coords.append((nx, ny))
+
+        if exits_enemy <= 2:
+            for move_name, next_pos in candidates.items():
+                if next_pos in exits_coords:
+                    return move_name
+        return None  # type: ignore
+
+    def _flood_fill(
+            self, start: tuple, obstacles: set, width: int, height: int
+        ) -> int:
+            # Si start es un entero o no es iterable, retornamos 0 para evitar el crash
+            if not isinstance(start, (tuple, list)) or len(start) < 2:
+                return 0
+
+            visited = set(obstacles)
+            start_pos = (start[0], start[1])
+            visited.add(start_pos)
+            queue = deque([start_pos])
+            space_count = 0
+
+            while queue:
+                curr = queue.popleft()
+                
+                # Verificación de seguridad en cada nodo
+                if not isinstance(curr, (tuple, list)) or len(curr) < 2:
+                    continue
+
+                x, y = curr[0], curr[1]
+                space_count += 1
+
+                for nx, ny in [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]:
+                    if (
+                        0 <= nx < width
+                        and 0 <= ny < height
+                        and (nx, ny) not in visited
+                    ):
+                        visited.add((nx, ny))
+                        queue.append((nx, ny))
+
+            return space_count
+
+    def _wall_distance(self, position: tuple, width: int, height: int) -> int:
+        x, y = position
+        return min(x, y, width - 1 - x, height - 1 - y)
+
+    def _find_enemy_tail_move(
+        self,
+        start: tuple,
+        enemy_tail: tuple,
+        candidates: dict,
+        obstacles: set,
+        width: int,
+        height: int,
+    ) -> str:
+        """Busca el movimiento más cercano a la cola del enemigo para comerla."""
+        shortest_dist = float("inf")
+        best_attack_move = None
+
+        for move_name, next_pos in candidates.items():
+            dist = self._bfs_distance(
+                next_pos, enemy_tail, obstacles, width, height
+            )
+            if dist < shortest_dist and dist != float("inf"):
+                shortest_dist = dist
+                best_attack_move = move_name
+
+        return best_attack_move  # type: ignore
+
+    def _bfs_best_move(
+        self,
+        start: tuple,
+        target: tuple,
+        candidates: dict,
+        obstacles: set,
+        width: int,
+        height: int,
+    ) -> str:
+        shortest_dist = float("inf")
+        best_direction = None
+
+        for move_name, next_pos in candidates.items():
+            dist = self._bfs_distance(
+                next_pos, target, obstacles, width, height
+            )
+            if dist < shortest_dist:
+                shortest_dist = dist
+                best_direction = move_name
+
+        return best_direction  # type: ignore
+
+    def _bfs_distance(
+        self,
+        start: tuple,
+        target: tuple,
+        obstacles: set,
+        width: int,
+        height: int,
+    ) -> float:
+        queue = deque([(start, 0)])
+        visited = set(obstacles)
+        visited.add(start)
+
+        while queue:
+            curr, dist = queue.popleft()
+            if curr == target:
+                return dist
+
+            x, y = curr
+            for nx, ny in [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]:
+                if (
+                    0 <= nx < width
+                    and 0 <= ny < height
+                    and (nx, ny) not in visited
+                ):
+                    visited.add((nx, ny))
+                    queue.append(((nx, ny), dist + 1))
+
+        return float("inf")
