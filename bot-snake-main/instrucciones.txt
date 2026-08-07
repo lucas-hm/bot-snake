@@ -1,0 +1,9 @@
+ejecuciòn de la aplicación:
+    
+    cd /home/morandona/Escritorio/BOT/dev_sentinel
+    
+    nix-shell
+    
+    pip install websockets
+
+    sudo nice -n -20 python3 main.py
