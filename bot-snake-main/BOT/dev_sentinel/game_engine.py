@@ -2,29 +2,12 @@ from collections import deque
 from random import choice
 from BOT.dev_sentinel.interfaces import CommandResult, IBotCommand # type: ignore
 
-
 class GameMoveTool(IBotCommand):
     @property
     def name(self) -> str:
         return "calculate_move"
 
     def execute(self, data: dict, **kwargs) -> CommandResult:
-        """Calcula el movimiento óptimo aplicando:
-        DEFENSIVA:
-        1. Parser ASCII que reconstruye la secuencia real del cuerpo.
-        2. Bloqueo estricto de giros de 180°.
-        3. Prevención de colisiones contra pared y cuerpo propio.
-        4. Prevención de colisiones por cruce de cabezas (Head-to-Head).
-        5. Simulación de espacio seguro tras comer comida.
-        6. Algoritmos BFS y Flood Fill para supervivencia extrema.
-        7. Heurística de pegado a la pared como respaldo seguro.
-        
-        OFENSIVA (si eres más grande que el enemigo):
-        8. Perseguir y comer la cola del enemigo para obtener puntos.
-        
-        SUBSISTENCIA:
-        9. Buscar comida con BFS cuando no hay oportunidades ofensivas.
-        """
         board_raw = data.get("board", {})
         game_id = data.get("game_id")
         turn_token = data.get("turn_token")
@@ -35,10 +18,8 @@ class GameMoveTool(IBotCommand):
         else:
             board_info = board_raw
 
-        # CRÍTICO: Usar rows/cols del servidor en lugar de calcular del tablero
-        # Esto evita mismatches si el tablero ASCII tiene spacing inconsistente
-        cols = data.get("cols")  # Ancho del servidor
-        rows = data.get("rows")  # Alto del servidor
+        cols = data.get("cols")
+        rows = data.get("rows")
         
         grid_width = cols if cols is not None else board_info.get("width", 15)
         grid_height = rows if rows is not None else board_info.get("height", 15)
@@ -66,7 +47,8 @@ class GameMoveTool(IBotCommand):
             tuple(enemy_body_list[0]) if len(enemy_body_list) > 0 else None
         )
 
-        # Regla 1: Liberación dinámica de colas
+        can_eat_enemy = len(my_body_list) > len(enemy_body_list)
+
         my_obstacles = (
             set(tuple(p) for p in my_body_list[:-1])
             if len(my_body_list) > 1
@@ -79,9 +61,9 @@ class GameMoveTool(IBotCommand):
         )
         obstacles = my_obstacles | enemy_obstacles
 
-        # Regla 2: Zonas de peligro por choque frontal contra la cabeza enemiga
+        # MODIFICACIÓN 1: Solo definir peligro de choque frontal si NO somos más grandes
         enemy_danger_zones = set()
-        if enemy_head:
+        if enemy_head and not can_eat_enemy:
             ex, ey = enemy_head
             for nx, ny in [
                 (ex + 1, ey),
@@ -90,11 +72,8 @@ class GameMoveTool(IBotCommand):
                 (ex, ey - 1),
             ]:
                 if 0 <= nx < grid_width and 0 <= ny < grid_height:
-                    # Si la serpiente enemiga es de igual o mayor tamaño, evitamos casillas en disputa
-                    if len(enemy_body_list) >= len(my_body_list):
-                        enemy_danger_zones.add((nx, ny))
+                    enemy_danger_zones.add((nx, ny))
 
-        # Regla 3: Bloqueo de giros de 180°
         forbidden_dir = None
         if len(my_body_list) >= 2:
             hx, hy = my_body_list[0]
@@ -115,7 +94,6 @@ class GameMoveTool(IBotCommand):
             "RIGHT": (my_head[0] + 1, my_head[1]),
         }
 
-        # Step 1: Filtrar movimientos físicamente válidos
         valid_moves = {}
         for move_name, target in directions.items():
             if move_name == forbidden_dir:
@@ -128,7 +106,6 @@ class GameMoveTool(IBotCommand):
                     valid_moves[move_name] = target
 
         if not valid_moves:
-            # Plan de emergencia si no hay opciones libres de obstáculos
             for move_name, target in directions.items():
                 if 0 <= target[0] < grid_width and 0 <= target[1] < grid_height:
                     is_tail_move = my_tail is not None and target == my_tail
@@ -151,10 +128,8 @@ class GameMoveTool(IBotCommand):
                 metadata={"strategy": "no_moves_left_emergency"},
             )
 
-        # Step 2: Filtrar movimientos por supervivencia (Flood Fill) y evitar zonas enemigas
         safe_moves = {}
         for move_name, target in valid_moves.items():
-            # Penalizar casillas que el rival pueda pisar en el mismo turno
             if target in enemy_danger_zones and len(valid_moves) > 1:
                 continue
 
@@ -172,7 +147,6 @@ class GameMoveTool(IBotCommand):
 
         candidates = safe_moves if safe_moves else valid_moves
 
-        # Estrategia por puntuación: combina supervivencia, comida, ataque y trampas
         strategy_mode = self._get_strategy_mode(
             len(my_body_list),
             len(enemy_body_list),
@@ -180,8 +154,13 @@ class GameMoveTool(IBotCommand):
             grid_width,
             grid_height,
         )
-        can_eat_enemy = len(my_body_list) > len(enemy_body_list)
-        attack_target = tuple(enemy_body_list[-1]) if can_eat_enemy and enemy_body_list else None
+        
+        # MODIFICACIÓN 2: Si somos más grandes, priorizamos la cabeza del enemigo como objetivo de ataque
+        attack_target = (
+            enemy_head if can_eat_enemy and enemy_head 
+            else (tuple(enemy_body_list[-1]) if can_eat_enemy and enemy_body_list else None)
+        )
+        
         closest_food = self._get_closest_food(my_head, foods, obstacles, grid_width, grid_height) if foods else None
 
         trap_targets = set()
@@ -201,6 +180,7 @@ class GameMoveTool(IBotCommand):
         best_move = None
         best_score = float("-inf")
         best_score_details = None
+
         for move_name, target in candidates.items():
             next_obstacles = set(obstacles)
             growing = target in food_positions
@@ -244,19 +224,18 @@ class GameMoveTool(IBotCommand):
 
         attack_move = None
         attack_score = float("-inf")
-        if can_eat_enemy and enemy_body_list:
-            enemy_tail = tuple(enemy_body_list[-1])
+        if can_eat_enemy and attack_target:
             attack_move = self._find_enemy_tail_move(
-                my_head, enemy_tail, candidates, obstacles, grid_width, grid_height
+                my_head, attack_target, candidates, obstacles, grid_width, grid_height
             )
             if attack_move and attack_move in scored_moves:
-                attack_score = scored_moves[attack_move] + 80.0
+                attack_score = scored_moves[attack_move] + 120.0
 
         trap_score = float("-inf")
         if trap_move and trap_move in scored_moves:
             trap_score = scored_moves[trap_move] + 40.0
 
-        if attack_move and attack_score >= best_score + 15.0:
+        if attack_move and attack_score >= best_score + 10.0:
             attack_target_pos = candidates[attack_move]
             return CommandResult(
                 success=True,
@@ -268,7 +247,7 @@ class GameMoveTool(IBotCommand):
                     "col": attack_target_pos[1],
                 },
                 metadata={
-                    "strategy": "Attack_Enemy_Tail",
+                    "strategy": "Aggressive_Head_Hunter" if attack_target == enemy_head else "Attack_Enemy_Tail",
                     "chosen_move": attack_move,
                     "score_details": scored_move_details.get(attack_move),
                 },
@@ -322,7 +301,7 @@ class GameMoveTool(IBotCommand):
     ) -> str:
         if my_body_len >= 8 or my_body_len >= enemy_body_len + 3:
             return "endgame"
-        if my_body_len > enemy_body_len and food_count <= 2:
+        if my_body_len > enemy_body_len:
             return "aggressive"
         if food_count <= 2 or width * height <= 64:
             return "survival"
@@ -378,7 +357,7 @@ class GameMoveTool(IBotCommand):
                 target, closest_food, obstacles, grid_width, grid_height
             )
             if food_distance != float("inf"):
-                food_weight = 4.8 if is_aggressive and attack_target is not None else 5.2
+                food_weight = 3.0 if is_aggressive else 5.2
                 details["food_score"] = max(0.0, 24.0 - food_distance) * food_weight
                 score += details["food_score"]
 
@@ -386,18 +365,19 @@ class GameMoveTool(IBotCommand):
             details["direct_food_score"] = 140.0
             score += details["direct_food_score"]
 
+        # MODIFICACIÓN 3: Incremento masivo de recompensa si somos agresivos y perseguimos la cabeza enemiga
         if is_aggressive and attack_target is not None:
-            details["attack_score"] = 90.0
+            details["attack_score"] = 120.0
             score += details["attack_score"]
             if target == attack_target:
-                details["attack_score"] += 160.0
-                score += 160.0
+                details["attack_score"] += 300.0
+                score += 300.0
             else:
                 attack_distance = self._bfs_distance(
                     target, attack_target, obstacles, grid_width, grid_height
                 )
                 if attack_distance != float("inf"):
-                    bonus = max(0.0, 8.0 - attack_distance) * 42.0
+                    bonus = max(0.0, 15.0 - attack_distance) * 60.0
                     details["attack_score"] += bonus
                     score += bonus
 
@@ -405,6 +385,7 @@ class GameMoveTool(IBotCommand):
             details["trap_score"] = 42.0
             score += details["trap_score"]
 
+        # MODIFICACIÓN 4: Si somos MÁS GRANDES, en vez de penalizar por estar cerca de la cabeza enemiga, premiamos el ataque
         if enemy_head is not None:
             danger_neighbors = {
                 (enemy_head[0] + 1, enemy_head[1]),
@@ -413,10 +394,13 @@ class GameMoveTool(IBotCommand):
                 (enemy_head[0], enemy_head[1] - 1),
             }
             if target in danger_neighbors or target == enemy_head:
-                details["danger_head_penalty"] = -22.0
+                if is_aggressive:
+                    details["danger_head_penalty"] = 80.0  # ¡Bonus de dominancia!
+                else:
+                    details["danger_head_penalty"] = -22.0
                 score += details["danger_head_penalty"]
 
-        if enemy_danger_zones and target in enemy_danger_zones:
+        if enemy_danger_zones and target in enemy_danger_zones and not is_aggressive:
             details["danger_zone_penalty"] = -12.0
             score += details["danger_zone_penalty"]
 
@@ -426,7 +410,7 @@ class GameMoveTool(IBotCommand):
             score += details["safety_bonus"]
 
         if strategy_mode == "aggressive":
-            details["strategy_bonus"] = 45.0
+            details["strategy_bonus"] = 60.0
             score += details["strategy_bonus"]
         elif strategy_mode == "survival":
             details["strategy_bonus"] = 30.0
@@ -439,7 +423,6 @@ class GameMoveTool(IBotCommand):
         return score, details
 
     def _parse_ascii_board(self, board_str: str, side: str) -> dict:
-        """Parsea el tablero ASCII ordenando la secuencia real del cuerpo de la serpiente."""
         lines = [line for line in board_str.split("\n") if line.strip()]
 
         my_head_char = "A" if side == "A" else "B"
@@ -473,7 +456,6 @@ class GameMoveTool(IBotCommand):
                 elif char == "*":
                     foods.append(pos)
 
-        # Ordenar los segmentos del cuerpo desde la cabeza en cadena contigua
         full_my_body = self._reconstruct_body_chain(my_head, raw_my_body)  # type: ignore
         full_enemy_body = self._reconstruct_body_chain(
             enemy_head, raw_enemy_body  # type: ignore
@@ -488,7 +470,6 @@ class GameMoveTool(IBotCommand):
         }
 
     def _reconstruct_body_chain(self, head: tuple, body_parts: list) -> list:
-        """Ordena secuencialmente los segmentos del cuerpo conectándolos paso a paso."""
         if not head:
             return []
         chain = [head]
@@ -499,7 +480,6 @@ class GameMoveTool(IBotCommand):
             cx, cy = curr
             next_part = None
 
-            # Buscar la parte vecina contigua
             for part in unattached:
                 px, py = part
                 if abs(px - cx) + abs(py - cy) == 1:
@@ -517,11 +497,6 @@ class GameMoveTool(IBotCommand):
     def _get_closest_food(
         self, start: tuple, foods: list, obstacles: set, width: int, height: int
     ) -> tuple:
-        """Return the closest food as a tuple, using BFS distances.
-
-        Ensure food coordinates are tuples because `_bfs_distance` compares
-        tuple positions; boards may provide lists.
-        """
         closest_food = None
         min_dist = float("inf")
         for food in foods:
@@ -565,7 +540,6 @@ class GameMoveTool(IBotCommand):
     def _flood_fill(
             self, start: tuple, obstacles: set, width: int, height: int
         ) -> int:
-            # Si start es un entero o no es iterable, retornamos 0 para evitar el crash
             if not isinstance(start, (tuple, list)) or len(start) < 2:
                 return 0
 
@@ -577,8 +551,6 @@ class GameMoveTool(IBotCommand):
 
             while queue:
                 curr = queue.popleft()
-                
-                # Verificación de seguridad en cada nodo
                 if not isinstance(curr, (tuple, list)) or len(curr) < 2:
                     continue
 
@@ -609,7 +581,6 @@ class GameMoveTool(IBotCommand):
         width: int,
         height: int,
     ) -> str:
-        """Busca el movimiento más cercano a la cola del enemigo para comerla."""
         shortest_dist = float("inf")
         best_attack_move = None
 
