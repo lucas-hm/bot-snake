@@ -79,7 +79,7 @@ for _ in range(max_turns):
         "game_id": result.get("game_id", GAME_STATE["game_id"]),
         "turn_token": result.get("turn_token", f"turn_{turn}"),
     }
-    time.sleep(0.05)
+    time.sleep(0.5)
 else:
     print("\nLímite de turnos alcanzado sin finalizar la partida.")
     print(f"Turnos jugados: {turn}")

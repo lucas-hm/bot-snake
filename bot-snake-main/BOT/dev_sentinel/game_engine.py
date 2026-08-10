@@ -1,6 +1,7 @@
 from collections import deque
 from random import choice
-from BOT.dev_sentinel.interfaces import CommandResult, IBotCommand # type: ignore
+import time
+from BOT.dev_sentinel.interfaces import CommandResult, IBotCommand  # type: ignore
 
 class GameMoveTool(IBotCommand):
     @property
@@ -8,6 +9,8 @@ class GameMoveTool(IBotCommand):
         return "calculate_move"
 
     def execute(self, data: dict, **kwargs) -> CommandResult:
+        start_time = time.process_time()
+
         board_raw = data.get("board", {})
         game_id = data.get("game_id")
         turn_token = data.get("turn_token")
@@ -47,6 +50,7 @@ class GameMoveTool(IBotCommand):
             tuple(enemy_body_list[0]) if len(enemy_body_list) > 0 else None
         )
 
+        # MEJORA 4: Solo somos hiperagresivos si somos ESTRICTAMENTE más grandes (+1 de largo)
         can_eat_enemy = len(my_body_list) > len(enemy_body_list)
 
         my_obstacles = (
@@ -54,14 +58,17 @@ class GameMoveTool(IBotCommand):
             if len(my_body_list) > 1
             else set()
         )
-        enemy_obstacles = (
-            set(tuple(p) for p in enemy_body_list[:-1])
-            if len(enemy_body_list) > 1
-            else set()
-        )
+        
+        # MEJORA 2: Liberación dinámica de cola del enemigo si no va a comer
+        enemy_will_eat = enemy_head in food_positions if enemy_head else False
+        if enemy_body_list and not enemy_will_eat:
+            enemy_obstacles = set(tuple(p) for p in enemy_body_list[:-1])
+        else:
+            enemy_obstacles = set(tuple(p) for p in enemy_body_list) if enemy_body_list else set()
+
         obstacles = my_obstacles | enemy_obstacles
 
-        # MODIFICACIÓN 1: Solo definir peligro de choque frontal si NO somos más grandes
+        # Zonas de peligro frontal si no somos estrictamente más grandes
         enemy_danger_zones = set()
         if enemy_head and not can_eat_enemy:
             ex, ey = enemy_head
@@ -155,7 +162,6 @@ class GameMoveTool(IBotCommand):
             grid_height,
         )
         
-        # MODIFICACIÓN 2: Si somos más grandes, priorizamos la cabeza del enemigo como objetivo de ataque
         attack_target = (
             enemy_head if can_eat_enemy and enemy_head 
             else (tuple(enemy_body_list[-1]) if can_eat_enemy and enemy_body_list else None)
@@ -182,6 +188,10 @@ class GameMoveTool(IBotCommand):
         best_score_details = None
 
         for move_name, target in candidates.items():
+            # MEJORA 1: Control de tiempo de respuesta (Timeout de seguridad a 80ms)
+            if (time.process_time() - start_time) > 0.08:
+                break
+
             next_obstacles = set(obstacles)
             growing = target in food_positions
             if growing and my_tail is not None:
@@ -348,9 +358,17 @@ class GameMoveTool(IBotCommand):
             "danger_zone_penalty": 0.0,
             "strategy_bonus": 0.0,
             "safety_bonus": 0.0,
+            "voronoi_asphyxia_bonus": 0.0,
         }
 
         score = details["space_score"] + details["wall_score"]
+
+        # MEJORA 3: Bono de Asfixia Voronoi (compara espacio nuestro vs espacio del rival)
+        if enemy_head:
+            enemy_space = self._flood_fill(enemy_head, obstacles, grid_width, grid_height)
+            if space_after_move > enemy_space * 1.4:
+                details["voronoi_asphyxia_bonus"] = 75.0
+                score += details["voronoi_asphyxia_bonus"]
 
         if closest_food is not None:
             food_distance = self._bfs_distance(
@@ -365,7 +383,6 @@ class GameMoveTool(IBotCommand):
             details["direct_food_score"] = 140.0
             score += details["direct_food_score"]
 
-        # MODIFICACIÓN 3: Incremento masivo de recompensa si somos agresivos y perseguimos la cabeza enemiga
         if is_aggressive and attack_target is not None:
             details["attack_score"] = 120.0
             score += details["attack_score"]
@@ -385,7 +402,6 @@ class GameMoveTool(IBotCommand):
             details["trap_score"] = 42.0
             score += details["trap_score"]
 
-        # MODIFICACIÓN 4: Si somos MÁS GRANDES, en vez de penalizar por estar cerca de la cabeza enemiga, premiamos el ataque
         if enemy_head is not None:
             danger_neighbors = {
                 (enemy_head[0] + 1, enemy_head[1]),
@@ -395,7 +411,7 @@ class GameMoveTool(IBotCommand):
             }
             if target in danger_neighbors or target == enemy_head:
                 if is_aggressive:
-                    details["danger_head_penalty"] = 80.0  # ¡Bonus de dominancia!
+                    details["danger_head_penalty"] = 80.0
                 else:
                     details["danger_head_penalty"] = -22.0
                 score += details["danger_head_penalty"]

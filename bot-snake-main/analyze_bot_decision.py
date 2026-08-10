@@ -41,7 +41,7 @@ foods = board_info.get('foods', [])
 my_head = tuple(my_body[0]) if my_body else None
 
 try:
-    closest = bot._get_closest_food(my_head, foods, set(), board.get('width'), board.get('height'))
+    closest = bot._get_closest_food(my_head, foods, set(), board.get('width'), board.get('height')) # type: ignore
     print('closest_food (internal):', closest)
 except Exception as e:
     print('closest_food error:', e)
@@ -55,7 +55,7 @@ except Exception as e:
 # Show BFS distance to closest food if available
 try:
     if closest is not None:
-        dist = bot._bfs_distance(my_head, tuple(closest), set(tuple(p) for p in my_body[:-1]) | set(tuple(p) for p in board_info.get('enemy_body', [])), board.get('width'), board.get('height'))
+        dist = bot._bfs_distance(my_head, tuple(closest), set(tuple(p) for p in my_body[:-1]) | set(tuple(p) for p in board_info.get('enemy_body', [])), board.get('width'), board.get('height')) # type: ignore
         print('bfs_distance to closest:', dist)
 except Exception as e:
     print('bfs error:', e)
