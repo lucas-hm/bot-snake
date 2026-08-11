@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import sys
+import time
 
 try:
     import websockets  # type: ignore
@@ -122,7 +123,6 @@ class VisualizadorPygame:
             )
 
         pygame.display.flip()  # type: ignore
-        # SE QUITÓ self.clock.tick(60) PARA NO RETARDAR EL SOCKET ASÍNCRONO
 
 
 class CodeChallengeWSClient:
@@ -131,7 +131,7 @@ class CodeChallengeWSClient:
         self,
         token: str,
         bot: CodeAssistantBot,
-        base_url: str = "wss://codechallenge-server.up.railway.app/ws",
+        base_url: str = "wss://codechallenge-server.up.railway.app:443/ws?token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1c2VyIjoiZGV2c2VudGluZWwifQ.Mg8HNaGaAaQql0zsbq9a0r8IZTCAeVYNKh3cmGgGBk8",
     ):
         self.url = f"{base_url}?token={token}"
         self.bot = bot
@@ -183,7 +183,7 @@ class CodeChallengeWSClient:
                 break
             except Exception as e:
                 logger.error(f"Connection error: {e}")
-                await asyncio.sleep(3)  # CAMBIO: Evita bloquear el event loop con time.sleep
+                await asyncio.sleep(3)
 
     async def _listen_loop(self, ws):
         async for raw_message in ws:
@@ -203,6 +203,9 @@ class CodeChallengeWSClient:
 
                 # Evento: Tu turno
                 elif event == "your_turn":
+                    # ⏱️ 1. Iniciar reloj al recibir el mensaje de la red
+                    t_start = time.perf_counter()
+
                     data = request_data.get("data", {})
                     game_id = request_data.get("game_id") or data.get("game_id")
                     turn_token = request_data.get("turn_token") or data.get(
@@ -228,7 +231,7 @@ class CodeChallengeWSClient:
                     cuerpo_rival = board.get("enemy_snake") or board.get(rival_side) or []
                     manzana = board.get("apple") or board.get("food")
 
-                    # 3. Renderizar tablero en pantalla (Síncrono ultrarrápido sin clock.tick)
+                    # 3. Renderizar tablero en pantalla
                     self.visualizador.renderizar(
                         {
                             "apple": manzana,
@@ -262,7 +265,6 @@ class CodeChallengeWSClient:
                     if isinstance(result.output, dict):
                         direction = result.output.get("direction")
 
-                    # CAMBIO: Validación que normaliza a minúsculas ("up", "down", "left", "right")
                     valid_directions = {"UP", "DOWN", "LEFT", "RIGHT", "up", "down", "left", "right"}
                     if direction not in valid_directions:
                         logger.warning(
@@ -284,7 +286,14 @@ class CodeChallengeWSClient:
                         {"action": "move", "data": move_payload},
                         ">",
                     )
+
+                    # 🚀 Enviar respuesta por WebSocket
                     await self.send_action(ws, "move", move_payload)
+
+                    # ⏱️ 2. Detener reloj tras enviar el paquete por la red
+                    t_end = time.perf_counter()
+                    total_e2e_ms = (t_end - t_start) * 1000
+                    logger.info(f"⏱️ Tiempo Total WSS (Pygame + Bot + WS Send): {total_e2e_ms:.2f} ms")
 
                 # Evento: Fin de partida
                 elif event == "game_over":

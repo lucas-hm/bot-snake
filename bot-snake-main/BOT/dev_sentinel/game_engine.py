@@ -1,3 +1,4 @@
+from collections import deque
 from random import choice
 import time
 from interfaces import CommandResult, IBotCommand  # type: ignore
@@ -155,44 +156,44 @@ class GameMoveTool(IBotCommand):
             },
         )
 
-    # def _get_bfs_distance_map(self, start: tuple, obstacles: set, width: int, height: int) -> dict:
-    #     queue = deque([(start, 0)])
-    #     visited = {start: 0}
-    #     while queue:
-    #         curr, dist = queue.popleft()
-    #         x, y = curr
-    #         for nx, ny in [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]:
-    #             if 0 <= nx < width and 0 <= ny < height and (nx, ny) not in obstacles:
-    #                 if (nx, ny) not in visited:
-    #                     visited[(nx, ny)] = dist + 1
-    #                     queue.append(((nx, ny), dist + 1))
-    #     return visited
+    def _get_bfs_distance_map(self, start: tuple, obstacles: set, width: int, height: int) -> dict:
+        queue = deque([(start, 0)])
+        visited = {start: 0}
+        while queue:
+            curr, dist = queue.popleft()
+            x, y = curr
+            for nx, ny in [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]:
+                if 0 <= nx < width and 0 <= ny < height and (nx, ny) not in obstacles:
+                    if (nx, ny) not in visited:
+                        visited[(nx, ny)] = dist + 1
+                        queue.append(((nx, ny), dist + 1))
+        return visited
 
-    # def _bfs_distance_fast(self, start: tuple, target: tuple, obstacles: set, width: int, height: int) -> float:
-    #     queue = deque([(start, 0)])
-    #     visited = set(obstacles)
-    #     visited.add(start)
-    #     while queue:
-    #         curr, dist = queue.popleft()
-    #         if curr == target:
-    #             return dist
-    #         x, y = curr
-    #         for nx, ny in [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]:
-    #             if 0 <= nx < width and 0 <= ny < height and (nx, ny) not in visited:
-    #                 visited.add((nx, ny))
-    #                 queue.append(((nx, ny), dist + 1))
-    #     return float("inf")
+    def _bfs_distance_fast(self, start: tuple, target: tuple, obstacles: set, width: int, height: int) -> float:
+        queue = deque([(start, 0)])
+        visited = set(obstacles)
+        visited.add(start)
+        while queue:
+            curr, dist = queue.popleft()
+            if curr == target:
+                return dist
+            x, y = curr
+            for nx, ny in [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]:
+                if 0 <= nx < width and 0 <= ny < height and (nx, ny) not in visited:
+                    visited.add((nx, ny))
+                    queue.append(((nx, ny), dist + 1))
+        return float("inf")
 
-    # def _flood_fill(self, start: tuple, obstacles: set, width: int, height: int) -> int:
-    #     visited = set(obstacles)
-    #     visited.add(start)
-    #     queue = deque([start])
-    #     space_count = 0
-    #     while queue:
-    #         x, y = queue.popleft()
-    #         space_count += 1
-    #         for nx, ny in [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]:
-    #             if 0 <= nx < width and 0 <= ny < height and (nx, ny) not in visited:
-    #                 visited.add((nx, ny))
-    #                 queue.append((nx, ny))
-    #     return space_count
+    def _flood_fill(self, start: tuple, obstacles: set, width: int, height: int) -> int:
+        visited = set(obstacles)
+        visited.add(start)
+        queue = deque([start])
+        space_count = 0
+        while queue:
+            x, y = queue.popleft()
+            space_count += 1
+            for nx, ny in [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]:
+                if 0 <= nx < width and 0 <= ny < height and (nx, ny) not in visited:
+                    visited.add((nx, ny))
+                    queue.append((nx, ny))
+        return space_count
