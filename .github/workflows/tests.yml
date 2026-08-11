@@ -39,8 +39,9 @@ jobs:
       run: |
         PYTHONPATH=./BOT/dev_sentinel python -c "import BOT.dev_sentinel.game_engine; print('Engine cargado correctamente')"
 
-    - name: Simulación de partida de prueba
+    - name: Simulación de partida con reporte de Cobertura
       run: |
         if [ -f "run_local_match_with_bot.py" ]; then
-          python run_local_match_with_bot.py
+          PYTHONPATH=./BOT/dev_sentinel coverage run --source=BOT/dev_sentinel run_local_match_with_bot.py
+          coverage report -m
         fi
