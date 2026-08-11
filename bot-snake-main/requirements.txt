@@ -1,14 +1,2 @@
 websockets
-subprocess
-re
-json
-time
-urllib
-random
-collections
-dataclasses
-typing
-sys
 pygame
-logging
-asyncio
