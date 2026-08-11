@@ -2,7 +2,6 @@ import asyncio
 import json
 import logging
 import sys
-import time
 
 try:
     import websockets  # type: ignore
@@ -20,7 +19,7 @@ logger = logging.getLogger("CodeChallengeWS")
 class VisualizadorPygame:
 
     def __init__(self, ancho_grid=20, alto_grid=20):
-        pygame.init() # type: ignore
+        pygame.init()  # type: ignore
         self.COLOR_FONDO = (20, 20, 20)
         self.COLOR_MANZANA = (255, 50, 50)  # Rojo
         self.COLOR_DEV = (0, 230, 0)  # Verde
@@ -40,16 +39,15 @@ class VisualizadorPygame:
             self.alto_pantalla - (alto_grid * self.tam_celda)
         ) // 2
 
-        self.screen = pygame.display.set_mode( # type: ignore
+        self.screen = pygame.display.set_mode(  # type: ignore
             (self.ancho_pantalla, self.alto_pantalla)
         )
-        pygame.display.set_caption("Partida Bot Snake - dev_sentinel") # type: ignore
-        self.clock = pygame.time.Clock() # type: ignore
+        pygame.display.set_caption("Partida Bot Snake - dev_sentinel")  # type: ignore
 
     def renderizar(self, estado):
-        for event in pygame.event.get(): # type: ignore
-            if event.type == pygame.QUIT: # type: ignore
-                pygame.quit() # type: ignore
+        for event in pygame.event.get():  # type: ignore
+            if event.type == pygame.QUIT:  # type: ignore
+                pygame.quit()  # type: ignore
                 sys.exit()
 
         self.screen.fill(self.COLOR_FONDO)
@@ -57,7 +55,7 @@ class VisualizadorPygame:
         # Dibujar Manzana
         if "apple" in estado and estado["apple"]:
             ax, ay = estado["apple"]
-            pygame.draw.rect( # type: ignore
+            pygame.draw.rect(  # type: ignore
                 self.screen,
                 self.COLOR_MANZANA,
                 (
@@ -91,7 +89,7 @@ class VisualizadorPygame:
             ):
                 color = self.COLOR_COLA_PEQUENA
 
-            pygame.draw.rect( # type: ignore
+            pygame.draw.rect(  # type: ignore
                 self.screen,
                 color,
                 (
@@ -112,7 +110,7 @@ class VisualizadorPygame:
             ):
                 color = self.COLOR_COLA_PEQUENA
 
-            pygame.draw.rect( # type: ignore
+            pygame.draw.rect(  # type: ignore
                 self.screen,
                 color,
                 (
@@ -123,8 +121,8 @@ class VisualizadorPygame:
                 ),
             )
 
-        pygame.display.flip() # type: ignore
-        self.clock.tick(60)
+        pygame.display.flip()  # type: ignore
+        # SE QUITÓ self.clock.tick(60) PARA NO RETARDAR EL SOCKET ASÍNCRONO
 
 
 class CodeChallengeWSClient:
@@ -176,7 +174,7 @@ class CodeChallengeWSClient:
                     logger.info("¡Conexión READY!")
 
                     if (
-                        hasattr(self, "target_game_id") and self.target_game_id # type: ignore
+                        hasattr(self, "target_game_id") and self.target_game_id  # type: ignore
                     ):  # type: ignore
                         await self.send_action(ws, "join_game", {"game_id": self.target_game_id})  # type: ignore
 
@@ -185,7 +183,7 @@ class CodeChallengeWSClient:
                 break
             except Exception as e:
                 logger.error(f"Connection error: {e}")
-                time.sleep(3)
+                await asyncio.sleep(3)  # CAMBIO: Evita bloquear el event loop con time.sleep
 
     async def _listen_loop(self, ws):
         async for raw_message in ws:
@@ -225,13 +223,12 @@ class CodeChallengeWSClient:
                         )
 
                     # 2. Extraer posiciones del 'board' para renderizar
-                    # Ajustá estas llaves si en la respuesta del server vienen con otro nombre
                     mi_cuerpo = board.get("my_snake") or board.get(side) or []
                     rival_side = "P2" if side == "P1" else "P1"
                     cuerpo_rival = board.get("enemy_snake") or board.get(rival_side) or []
                     manzana = board.get("apple") or board.get("food")
 
-                    # 3. Renderizar tablero en pantalla
+                    # 3. Renderizar tablero en pantalla (Síncrono ultrarrápido sin clock.tick)
                     self.visualizador.renderizar(
                         {
                             "apple": manzana,
@@ -265,12 +262,16 @@ class CodeChallengeWSClient:
                     if isinstance(result.output, dict):
                         direction = result.output.get("direction")
 
-                    if direction not in {"UP", "DOWN", "LEFT", "RIGHT"}:
+                    # CAMBIO: Validación que normaliza a minúsculas ("up", "down", "left", "right")
+                    valid_directions = {"UP", "DOWN", "LEFT", "RIGHT", "up", "down", "left", "right"}
+                    if direction not in valid_directions:
                         logger.warning(
-                            "Dirección inválida del bot: %s. Usando RIGHT por seguridad.",
+                            "Dirección inválida del bot: %s. Usando 'right' por seguridad.",
                             direction,
                         )
-                        direction = "RIGHT"
+                        direction = "right"
+                    else:
+                        direction = direction.lower()
 
                     move_payload = {
                         "game_id": game_id,

@@ -1,7 +1,6 @@
 import ast
 from interfaces import IBotCommand, CommandResult
 
-
 class ASTMetricsAnalyzer(IBotCommand):
     @property
     def name(self) -> str:
