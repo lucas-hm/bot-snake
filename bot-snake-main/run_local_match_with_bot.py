@@ -9,7 +9,7 @@ import urllib.request
 sys.path.insert(0, os.path.join(os.getcwd(), "BOT", "dev_sentinel"))
 
 from bot import CodeAssistantBot
-from game_engine import GameMoveTool
+from .BOT.dev_sentinel.game_engine import GameMoveTool
 from arena_server import GAME_STATE, run
 
 # 1. Instanciar Bot y registrar el comando
