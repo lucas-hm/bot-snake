@@ -41,12 +41,12 @@ class TestGameEngineCoverage(unittest.TestCase):
             self.assertTrue(res.success)
             mock_parse.assert_called_once_with("|---|---|---|", "A")
 
-    def test_lines_84_86_emergency_no_moves(self): # type: ignore
-        """Cubre el caso emergency_no_moves encortando totalmente a la serpiente."""
-        # En una grilla 3x3, con la cabeza en (0,0) y el cuerpo en (0,1):
-        # - UP (-1) y LEFT (-1) están fuera de los límites.
-        # - DOWN (1) está ocupado por su propio cuerpo [0, 1].
-        # - RIGHT (1) está ocupado por el enemigo [1, 0] y su cuerpo [2, 0].
+    def test_lines_84_86_emergency_no_moves(self):
+        """Cubre el caso emergency_no_moves bloqueando efectivamente todos los casilleros."""
+        # En grilla 3x3 con cabeza en (0,0) y cuello en (0,1) [DOWN]:
+        # - UP (-1) y LEFT (-1) -> Fuera de límites de grilla.
+        # - DOWN (0,1) -> Bloqueado por cuello/cuerpo.
+        # - RIGHT (1,0) -> Bloqueado por obstáculo enemigo en (1,0) [que no es su cola].
         payload = {
             "game_id": "g1",
             "turn_token": "t1",
@@ -54,7 +54,7 @@ class TestGameEngineCoverage(unittest.TestCase):
             "rows": 3,
             "board": {
                 "my_body": [[0, 0], [0, 1]],
-                "enemy_body": [[1, 0], [2, 0]],
+                "enemy_body": [[1, 0], [2, 0]],  # (1,0) es la cabeza/cuerpo (no la cola)
                 "foods": [],
             },
         }
@@ -68,7 +68,7 @@ class TestGameEngineCoverage(unittest.TestCase):
             res.metadata.get("strategy"),
             "emergency_no_moves",
         )
-
+        
     def test_line_35_no_my_body(self):
         """Cubre el caso donde my_body_list está vacío."""
         payload = {
@@ -132,46 +132,6 @@ class TestGameEngineCoverage(unittest.TestCase):
         res = self.tool.execute(payload)
 
         self.assertTrue(res.success)
-
-    def test_lines_84_86_emergency_no_moves(self):
-        """
-        Cubre el caso emergency_no_moves.
-
-        Se fuerza una situación donde todos los movimientos
-        inmediatos están bloqueados.
-        """
-        payload = {
-            "game_id": "g1",
-            "turn_token": "t1",
-            "cols": 3,
-            "rows": 3,
-            "board": {
-                "my_body": [[1, 1], [1, 0]],
-                "enemy_body": [
-                    [1, 2],
-                    [0, 1],
-                    [2, 1],
-                ],
-                "foods": [],
-            },
-        }
-
-        with patch.object(
-            game_engine, # type: ignore
-            "choice",
-            return_value="UP",
-        ):
-            res = self.tool.execute(payload)
-
-        self.assertTrue(res.success)
-        self.assertEqual(
-            res.metadata["strategy"], # type: ignore
-            "emergency_no_moves",
-        )
-        self.assertEqual(
-            res.output["direction"],
-            "UP",
-        )
 
     def test_food_directly_ahead(self):
         """
