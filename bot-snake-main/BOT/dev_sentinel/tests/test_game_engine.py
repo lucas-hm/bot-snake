@@ -1,4 +1,5 @@
 
+
 import unittest
 from unittest.mock import patch
 
@@ -16,12 +17,19 @@ class TestGameEngineCoverage(unittest.TestCase):
 
     def test_line_20_ascii_board_parsing(self):
         """Cubre la línea 20: cuando board es un string ASCII."""
+        mock_board_info = {
+            "width": 5,
+            "height": 5,
+            "my_body": [[1, 1], [1, 0]],
+            "enemy_body": [[3, 3]],
+            "foods": [[2, 2]],
+        }
         with patch.object(
             self.tool,
             "_parse_ascii_board",
+            return_value=mock_board_info,
             create=True,
         ) as mock_parse:
-
             payload = {
                 "game_id": "g1",
                 "turn_token": "t1",
@@ -30,12 +38,36 @@ class TestGameEngineCoverage(unittest.TestCase):
             }
 
             res = self.tool.execute(payload)
-
             self.assertTrue(res.success)
-            mock_parse.assert_called_once_with(
-                "|---|---|---|",
-                "A",
-            )
+            mock_parse.assert_called_once_with("|---|---|---|", "A")
+
+    def test_lines_84_86_emergency_no_moves(self): # type: ignore
+        """Cubre el caso emergency_no_moves encortando totalmente a la serpiente."""
+        # En una grilla 3x3, con la cabeza en (0,0) y el cuerpo en (0,1):
+        # - UP (-1) y LEFT (-1) están fuera de los límites.
+        # - DOWN (1) está ocupado por su propio cuerpo [0, 1].
+        # - RIGHT (1) está ocupado por el enemigo [1, 0] y su cuerpo [2, 0].
+        payload = {
+            "game_id": "g1",
+            "turn_token": "t1",
+            "cols": 3,
+            "rows": 3,
+            "board": {
+                "my_body": [[0, 0], [0, 1]],
+                "enemy_body": [[1, 0], [2, 0]],
+                "foods": [],
+            },
+        }
+
+        with patch("BOT.dev_sentinel.game_engine.choice", return_value="UP"):
+            res = self.tool.execute(payload)
+
+        self.assertTrue(res.success)
+        assert res.metadata is not None
+        self.assertEqual(
+            res.metadata.get("strategy"),
+            "emergency_no_moves",
+        )
 
     def test_line_35_no_my_body(self):
         """Cubre el caso donde my_body_list está vacío."""
