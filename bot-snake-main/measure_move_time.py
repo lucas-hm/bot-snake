@@ -54,7 +54,7 @@ async def test_ping(num_samples=10):
         print(f"❌ Error al conectar con el servidor WebSocket: {e}")
 
 
-def measure_bot_performance(N=500):
+def measure_bot_performance(N=1000):
     """Mide la velocidad de cálculo del algoritmo local del bot."""
     print(f"\n=== 2. BENCHMARK DE MOVIMIENTO LOCAL (N={N}) ===")
 

@@ -1,7 +1,9 @@
 from collections import deque
 from random import choice
 import time
-from interfaces import CommandResult, IBotCommand  # type: ignore
+
+from .interfaces import CommandResult, IBotCommand  # type: ignore
+
 
 class GameMoveTool(IBotCommand):
     @property
@@ -17,7 +19,7 @@ class GameMoveTool(IBotCommand):
         side = data.get("side", "A")
 
         if isinstance(board_raw, str):
-            board_info = self._parse_ascii_board(board_raw, side) # type: ignore
+            board_info = self._parse_ascii_board(board_raw, side)  # type: ignore
         else:
             board_info = board_raw
 
@@ -25,7 +27,7 @@ class GameMoveTool(IBotCommand):
         rows = data.get("rows")
         grid_width = cols if cols is not None else board_info.get("width", 15)
         grid_height = rows if rows is not None else board_info.get("height", 15)
-        
+
         my_body_list = board_info.get("my_body", [])
         enemy_body_list = board_info.get("enemy_body", [])
         foods = board_info.get("foods", [])
@@ -42,9 +44,8 @@ class GameMoveTool(IBotCommand):
         my_tail = tuple(my_body_list[-1]) if len(my_body_list) > 0 else None
         enemy_head = tuple(enemy_body_list[0]) if len(enemy_body_list) > 0 else None
 
-        can_eat_enemy = len(my_body_list) > len(enemy_body_list)
         my_obstacles = set(tuple(p) for p in my_body_list[:-1]) if len(my_body_list) > 1 else set()
-        
+
         enemy_will_eat = enemy_head in food_positions if enemy_head else False
         if enemy_body_list and not enemy_will_eat:
             enemy_obstacles = set(tuple(p) for p in enemy_body_list[:-1])
@@ -58,10 +59,14 @@ class GameMoveTool(IBotCommand):
         if len(my_body_list) >= 2:
             hx, hy = my_body_list[0]
             nx, ny = my_body_list[1]
-            if hx > nx: forbidden_dir = "LEFT"
-            elif hx < nx: forbidden_dir = "RIGHT"
-            elif hy > ny: forbidden_dir = "UP"
-            elif hy < ny: forbidden_dir = "DOWN"
+            if hx > nx:
+                forbidden_dir = "LEFT"
+            elif hx < nx:
+                forbidden_dir = "RIGHT"
+            elif hy > ny:
+                forbidden_dir = "UP"
+            elif hy < ny:
+                forbidden_dir = "DOWN"
 
         directions = {
             "UP": (my_head[0], my_head[1] - 1),
@@ -89,14 +94,14 @@ class GameMoveTool(IBotCommand):
                 metadata={"strategy": "emergency_no_moves", "execution_time_ms": elapsed},
             )
 
+        # Invocación real a _get_bfs_distance_map desde la cabeza
         dist_map = self._get_bfs_distance_map(my_head, obstacles, grid_width, grid_height)
-        dist_map = {}
 
         closest_food = None
         min_food_dist = float("inf")
         for f in food_positions:
-            # Reemplazado BFS por Distancia Manhattan instantánea O(1)
-            d = abs(f[0] - my_head[0]) + abs(f[1] - my_head[1])
+            # Se usa la distancia BFS calculada; si no hay ruta en el mapa, cae a Manhattan
+            d = dist_map.get(f, abs(f[0] - my_head[0]) + abs(f[1] - my_head[1]))
             if d < min_food_dist:
                 min_food_dist = d
                 closest_food = f
@@ -104,23 +109,22 @@ class GameMoveTool(IBotCommand):
         scored_moves = {}
         best_move = None
         best_score = float("-inf")
-
         required_space = len(my_body_list)
 
         for move_name, target in valid_moves.items():
             space_after = self._flood_fill(target, obstacles, grid_width, grid_height)
             if space_after < required_space and len(valid_moves) > 1:
                 continue
-            space_after = 0
 
-            # Scoring simplificado y directo
             score = 0.0
-            
+
             if target in food_positions:
                 score += 100.0
             elif closest_food:
-                # Reemplazado BFS por Distancia Manhattan
-                food_dist_from_target = abs(closest_food[0] - target[0]) + abs(closest_food[1] - target[1])
+                # Invocación a _bfs_distance_fast para calcular la distancia exacta desde el movimiento candidato hasta la comida
+                food_dist_from_target = self._bfs_distance_fast(target, closest_food, obstacles, grid_width, grid_height)
+                if food_dist_from_target == float("inf"):
+                    food_dist_from_target = abs(closest_food[0] - target[0]) + abs(closest_food[1] - target[1])
                 score += max(0.0, 30.0 - food_dist_from_target) * 3.0
 
             scored_moves[move_name] = score
@@ -144,7 +148,7 @@ class GameMoveTool(IBotCommand):
                 "col": best_target[1],
             },
             metadata={
-                "strategy": "No_BFS_No_FloodFill_Test",
+                "strategy": "BFS_Active_Strategy",
                 "chosen_move": best_move,
                 "execution_time_ms": round(elapsed_ms, 4),
             },
@@ -170,7 +174,7 @@ class GameMoveTool(IBotCommand):
         while queue:
             curr, dist = queue.popleft()
             if curr == target:
-                return dist
+                return float(dist)
             x, y = curr
             for nx, ny in [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]:
                 if 0 <= nx < width and 0 <= ny < height and (nx, ny) not in visited:

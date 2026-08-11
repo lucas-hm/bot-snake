@@ -1,43 +1,58 @@
 { pkgs ? import <nixpkgs> {} }:
 
-pkgs.mkShell {
-  # 1. Paquetes que querés dentro del entorno
+let
+  pythonPackages = pkgs.python312Packages;
+in
+pkgs.mkShell rec {
+  name = "morandonaEnv";
+  venvDir = "./.venv";
+
   buildInputs = with pkgs; [
-    python3
-    python312Packages.pip
-    python312Packages.virtualenv # Opcional, pero útil para aislar más
+    # Intérprete de Python y Hooks para Venv automático de Nix
+    pythonPackages.python
+    pythonPackages.venvShellHook
+
+    # Paquetes de Python administrados por Nixpkgs (cargan directo al PYTHONPATH)
+    pythonPackages.pip
+    pythonPackages.numpy
+    pythonPackages.requests
+    pythonPackages.pymongo
+    pythonPackages.mysqlclient
+
+    # Herramientas de desarrollo y Bases de Datos
     mariadb
     sqlite
-    # Librerías de sistema que Python suele necesitar (ej: para pandas o opencv)
-    stdenv.cc.cc.lib
-    libz
-    (python3.withPackages (ps: with ps; [
-      pymongo        # Driver oficial para MongoDB
-      mysqlclient    # Driver eficiente para MariaDB/MySQL
-      # (SQLite ya viene incorporado dentro del propio Python)
-    ]))
-
     nodejs
     pkg-config
+    git
+
+    # Librerías C y del sistema requeridas para compilar/ejecutar wheels con pip
+    stdenv.cc.cc.lib
     openssl
+    taglib
+    libxml2
+    libxslt
+    libzip
+    zlib
   ];
 
-  # 2. Comandos que se ejecutan automáticamente al entrar al shell
-  shellHook = ''
-    echo "⚽ Entrando al entorno de desarrollo de Morandona..."
-
-    # Crear un entorno virtual de Python si no existe
-    if [ ! -d ".venv" ]; then
-      python -m venv .venv
-      echo "🐍 Entorno virtual creado."
+  # Se ejecuta la primera vez que Nix crea el entorno virtual (.venv)
+  postVenvCreation = ''
+    unset SOURCE_DATE_EPOCH
+    if [ -f requirements.txt ]; then
+      echo "📦 Instalando dependencias desde requirements.txt..."
+      pip install -r requirements.txt
     fi
+  '';
 
-    # Activarlo automáticamente
-    source .venv/bin/activate
+  # Se ejecuta CADA VEZ que entrás al nix-shell
+  postShellHook = ''
+    unset SOURCE_DATE_EPOCH
+    
+    # Corrige problemas de librerías dinámicas de C para paquetes como OpenCV, Pandas, etc.
+    export LD_LIBRARY_PATH="${pkgs.stdenv.cc.cc.lib}/lib:${pkgs.zlib}/lib:$LD_LIBRARY_PATH"
 
-    # Exportar variables para que las librerías de C funcionen bien en Nix
-    export LD_LIBRARY_PATH="${pkgs.stdenv.cc.cc.lib}/lib:$LD_LIBRARY_PATH"
-
-    echo "🔥 Estás listo. Usá 'pip install' tranquilo dentro de este shell."
+    echo "⚽ Entrando al entorno de desarrollo..."
+    echo "🔥 Entorno virtual activado. Podés usar 'pip install' tranquilamente."
   '';
 }
