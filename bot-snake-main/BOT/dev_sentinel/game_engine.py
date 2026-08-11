@@ -89,10 +89,7 @@ class GameMoveTool(IBotCommand):
                 metadata={"strategy": "emergency_no_moves", "execution_time_ms": elapsed},
             )
 
-        # -------------------------------------------------------------
-        # DESACTIVADO TEMPORALMENTE: Matriz BFS Única desde la cabeza
-        # -------------------------------------------------------------
-        # dist_map = self._get_bfs_distance_map(my_head, obstacles, grid_width, grid_height)
+        dist_map = self._get_bfs_distance_map(my_head, obstacles, grid_width, grid_height)
         dist_map = {}
 
         closest_food = None
@@ -111,12 +108,9 @@ class GameMoveTool(IBotCommand):
         required_space = len(my_body_list)
 
         for move_name, target in valid_moves.items():
-            # -------------------------------------------------------------
-            # DESACTIVADO TEMPORALMENTE: Flood Fill para verificar espacio
-            # -------------------------------------------------------------
-            # space_after = self._flood_fill(target, obstacles, grid_width, grid_height)
-            # if space_after < required_space and len(valid_moves) > 1:
-            #     continue
+            space_after = self._flood_fill(target, obstacles, grid_width, grid_height)
+            if space_after < required_space and len(valid_moves) > 1:
+                continue
             space_after = 0
 
             # Scoring simplificado y directo
