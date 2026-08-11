@@ -13,7 +13,7 @@ def build_bot() -> CodeAssistantBot:
     return bot
 
 if __name__ == "__main__":
-    MY_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1c2VyIjoibHVjYXNtb3JhbiJ9.v9EzLD_0HKOzcCJW_dTb1hdAoOdX4OnJcbFVeyH12a8"
+    MY_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1c2VyIjoiZGV2c2VudGluZWwifQ.Mg8HNaGaAaQql0zsbq9a0r8IZTCAeVYNKh3cmGgGBk8"
     
     # 1. Pedir el ID de la partida por consola si es necesario
     target_game_id = input("Ingresá el ID de la partida (presioná Enter para modo automático/desafíos): ").strip()

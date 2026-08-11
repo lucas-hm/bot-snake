@@ -1,6 +1,6 @@
 ejecuciòn de la aplicación:
     
-    cd /home/morandona/Escritorio/BOT/dev_sentinel
+    cd /home/morandona/lucas/BOT/dev_sentinel
     
     nix-shell
     

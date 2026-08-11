@@ -1,7 +1,7 @@
 from collections import deque
 from random import choice
 import time
-from BOT.dev_sentinel.interfaces import CommandResult, IBotCommand  # type: ignore
+from interfaces import CommandResult, IBotCommand  # type: ignore
 
 class GameMoveTool(IBotCommand):
     @property
@@ -9,7 +9,8 @@ class GameMoveTool(IBotCommand):
         return "calculate_move"
 
     def execute(self, data: dict, **kwargs) -> CommandResult:
-        start_time = time.process_time()
+        # CORRECCIÓN 1: Medir tiempo real (wall-clock time), no CPU time
+        start_time = time.perf_counter()
 
         board_raw = data.get("board", {})
         game_id = data.get("game_id")
@@ -50,7 +51,6 @@ class GameMoveTool(IBotCommand):
             tuple(enemy_body_list[0]) if len(enemy_body_list) > 0 else None
         )
 
-        # MEJORA 4: Solo somos hiperagresivos si somos ESTRICTAMENTE más grandes (+1 de largo)
         can_eat_enemy = len(my_body_list) > len(enemy_body_list)
 
         my_obstacles = (
@@ -59,7 +59,6 @@ class GameMoveTool(IBotCommand):
             else set()
         )
         
-        # MEJORA 2: Liberación dinámica de cola del enemigo si no va a comer
         enemy_will_eat = enemy_head in food_positions if enemy_head else False
         if enemy_body_list and not enemy_will_eat:
             enemy_obstacles = set(tuple(p) for p in enemy_body_list[:-1])
@@ -68,7 +67,6 @@ class GameMoveTool(IBotCommand):
 
         obstacles = my_obstacles | enemy_obstacles
 
-        # Zonas de peligro frontal si no somos estrictamente más grandes
         enemy_danger_zones = set()
         if enemy_head and not can_eat_enemy:
             ex, ey = enemy_head
@@ -137,6 +135,10 @@ class GameMoveTool(IBotCommand):
 
         safe_moves = {}
         for move_name, target in valid_moves.items():
+            # CORRECCIÓN 2: Límite estricto de seguridad a 40ms en tiempo real
+            if (time.perf_counter() - start_time) > 0.02:
+                break
+
             if target in enemy_danger_zones and len(valid_moves) > 1:
                 continue
 
@@ -167,11 +169,13 @@ class GameMoveTool(IBotCommand):
             else (tuple(enemy_body_list[-1]) if can_eat_enemy and enemy_body_list else None)
         )
         
-        closest_food = self._get_closest_food(my_head, foods, obstacles, grid_width, grid_height) if foods else None
+        closest_food = None
+        if foods and (time.perf_counter() - start_time) <= 0.04:
+            closest_food = self._get_closest_food(my_head, foods, obstacles, grid_width, grid_height)
 
         trap_targets = set()
         trap_move = None
-        if enemy_head:
+        if enemy_head and (time.perf_counter() - start_time) <= 0.04:
             ex, ey = enemy_head
             for nx, ny in [(ex + 1, ey), (ex - 1, ey), (ex, ey + 1), (ex, ey - 1)]:
                 if 0 <= nx < grid_width and 0 <= ny < grid_height and (nx, ny) not in obstacles:
@@ -187,9 +191,13 @@ class GameMoveTool(IBotCommand):
         best_score = float("-inf")
         best_score_details = None
 
+        # CORRECCIÓN 3: Evaluación de Voronoi una sola vez para no repetir Flood Fill en cada iteración
+        enemy_space = None
+        if enemy_head and (time.perf_counter() - start_time) <= 0.04:
+            enemy_space = self._flood_fill(enemy_head, obstacles, grid_width, grid_height)
+
         for move_name, target in candidates.items():
-            # MEJORA 1: Control de tiempo de respuesta (Timeout de seguridad a 80ms)
-            if (time.process_time() - start_time) > 0.08:
+            if (time.perf_counter() - start_time) > 0.04:
                 break
 
             next_obstacles = set(obstacles)
@@ -224,6 +232,7 @@ class GameMoveTool(IBotCommand):
                 space_after_move=space_after_move,
                 wall_distance=self._wall_distance(target, grid_width, grid_height),
                 strategy_mode=strategy_mode,
+                enemy_space=enemy_space,
             )
             scored_moves[move_name] = score
             scored_move_details[move_name] = details
@@ -234,7 +243,7 @@ class GameMoveTool(IBotCommand):
 
         attack_move = None
         attack_score = float("-inf")
-        if can_eat_enemy and attack_target:
+        if can_eat_enemy and attack_target and (time.perf_counter() - start_time) <= 0.04:
             attack_move = self._find_enemy_tail_move(
                 my_head, attack_target, candidates, obstacles, grid_width, grid_height
             )
@@ -338,6 +347,7 @@ class GameMoveTool(IBotCommand):
         space_after_move: int | None = None,
         wall_distance: int | None = None,
         strategy_mode: str = "balanced",
+        enemy_space: int | None = None,
     ) -> tuple[float, dict[str, float]]:
         if space_after_move is None:
             space_after_move = self._flood_fill(
@@ -363,9 +373,7 @@ class GameMoveTool(IBotCommand):
 
         score = details["space_score"] + details["wall_score"]
 
-        # MEJORA 3: Bono de Asfixia Voronoi (compara espacio nuestro vs espacio del rival)
-        if enemy_head:
-            enemy_space = self._flood_fill(enemy_head, obstacles, grid_width, grid_height)
+        if enemy_space is not None:
             if space_after_move > enemy_space * 1.4:
                 details["voronoi_asphyxia_bonus"] = 75.0
                 score += details["voronoi_asphyxia_bonus"]
@@ -658,5 +666,4 @@ class GameMoveTool(IBotCommand):
                 ):
                     visited.add((nx, ny))
                     queue.append(((nx, ny), dist + 1))
-
         return float("inf")

@@ -1,0 +1,46 @@
+name: Continuous Integration - Bot Sentinel
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  test-and-lint:
+    runs-on: ubuntu-latest
+
+    # Establece bot-snake-main como el directorio de trabajo por defecto
+    defaults:
+      run:
+        working-directory: ./bot-snake-main
+
+    steps:
+    - name: Checkout del código
+      uses: actions/checkout@v4
+
+    - name: Configurar versión de Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+
+    - name: Instalar dependencias
+      run: |
+        python -m pip install --upgrade pip
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+        pip install pytest flake8
+
+    - name: Verificación de sintaxis (Linter)
+      run: |
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+
+    - name: Probar importación del Engine
+      run: |
+        python -c "import BOT.dev_sentinel.game_engine; print('Engine cargado correctamente')"
+
+    - name: Simulación de partida de prueba
+      run: |
+        if [ -f "run_local_match_with_bot.py" ]; then
+          python run_local_match_with_bot.py
+        fi
