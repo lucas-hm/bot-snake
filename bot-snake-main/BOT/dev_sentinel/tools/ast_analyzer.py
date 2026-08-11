@@ -27,6 +27,5 @@ class ASTMetricsAnalyzer(IBotCommand):
         except SyntaxError as e:
             return CommandResult(
                 success=False,
-                output=f"Error de sintaxis en el código: {
-                    e.msg} (Línea {e.lineno})"
+                output=f"Error de sintaxis en el código: {e.msg} (Línea {e.lineno})"
             )
