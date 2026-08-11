@@ -1,7 +1,7 @@
 
 import unittest
 from unittest.mock import MagicMock, patch
-from game_engine import GameMoveTool
+from ..game_engine import GameMoveTool
 
 
 class TestGameEngineCoverage(unittest.TestCase):
