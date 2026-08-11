@@ -17,6 +17,8 @@ bot = CodeAssistantBot("DevSentinel")
 game_tool = GameMoveTool()
 bot.register_command(game_tool)
 
+bot.process_request("unregistered_command", {})
+
 # 2. Configurar 30 manzanas en el tablero local
 WIDTH = GAME_STATE["board"].get("width", 15)
 occupied = set(tuple(p) for p in GAME_STATE["board"].get("my_body", [])) | set(tuple(p) for p in GAME_STATE["board"].get("enemy_body", []))
