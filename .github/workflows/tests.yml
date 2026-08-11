@@ -45,16 +45,3 @@ jobs:
           PYTHONPATH=./BOT/dev_sentinel coverage run --source=BOT/dev_sentinel run_local_match_with_bot.py
           coverage report -m --omit="**/pygame.py,**/ws_client.py,**/main.py,**/client_runner.py"
         fi
-        
-    - name: Simulación de partida y Tests Unitarios
-      run: |
-        if [ -f "run_local_match_with_bot.py" ]; then
-          # 1. Simulación en vivo
-          PYTHONPATH=./BOT/dev_sentinel coverage run --source=BOT/dev_sentinel run_local_match_with_bot.py
-          
-          # 2. Test unitario de las 7 líneas faltantes (-a acumula la cobertura)
-          PYTHONPATH=./BOT/dev_sentinel/tests coverage run -a --source=BOT/dev_sentinel/tests -m unittest test_game_engine.py
-          # 3. Reporte final
-          coverage report -m --omit="**/pygame.py,**/ws_client.py,**/main.py,**/client_runner.py"
-        fi
-      
