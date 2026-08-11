@@ -10,7 +10,6 @@ jobs:
   test-and-lint:
     runs-on: ubuntu-latest
 
-    # Establece bot-snake-main como el directorio de trabajo por defecto
     defaults:
       run:
         working-directory: ./bot-snake-main
@@ -24,6 +23,7 @@ jobs:
       with:
         python-version: '3.11'
         cache: 'pip'
+        cache-dependency-path: 'bot-snake-main/requirements.txt'
 
     - name: Instalar dependencias
       run: |
