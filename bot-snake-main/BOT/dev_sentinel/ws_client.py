@@ -3,6 +3,7 @@ import json
 import logging
 import sys
 import time
+import os
 
 try:
     import websockets  # type: ignore
@@ -131,9 +132,10 @@ class CodeChallengeWSClient:
         self,
         token: str = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1c2VyIjoiZGV2c2VudGluZWwifQ.Mg8HNaGaAaQql0zsbq9a0r8IZTCAeVYNKh3cmGgGBk8",
         bot = CodeAssistantBot,
-        base_uri = "wss://server.codechallenge.net.ar/ws?token={}".format(self.auth_token), # type: ignore
+        auth_token: str | None = None,
     ):
-        self.url = f"{base_uri}&token={token}"
+        final_token = auth_token or os.getenv("AUTH_TOKEN", token)
+        self.url = f"wss://server.codechallenge.net.ar/ws?token={final_token}"
         self.bot = bot
         self.history = {}
         self.visualizador = None  # Instancia dinámica del render de Pygame
