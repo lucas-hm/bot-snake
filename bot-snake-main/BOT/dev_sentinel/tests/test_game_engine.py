@@ -1,13 +1,13 @@
 import unittest
 from unittest.mock import patch
 
-from ..game_engine import GameMoveTool
-
+import game_engine
+from ...dev_sentinel.game_engine import GameMoveTool
 
 class TestGameEngineCoverage(unittest.TestCase):
 
     def setUp(self):
-        self.tool = GameMoveTool()
+        self.tool = game_engine.GameMoveTool()
 
     def test_property_name(self):
         """Cubre la propiedad name."""
