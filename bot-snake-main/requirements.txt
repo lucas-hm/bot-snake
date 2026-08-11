@@ -1,5 +1,4 @@
 websockets
-ast
 subprocess
 re
 json
