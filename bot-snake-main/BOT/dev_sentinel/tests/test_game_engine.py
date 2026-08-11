@@ -1,8 +1,8 @@
 import unittest
 from unittest.mock import patch
 
-import game_engine
-from ...dev_sentinel.game_engine import GameMoveTool
+import BOT.dev_sentinel.game_engine as game_engine
+from BOT.dev_sentinel import game_engine
 
 class TestGameEngineCoverage(unittest.TestCase):
 
