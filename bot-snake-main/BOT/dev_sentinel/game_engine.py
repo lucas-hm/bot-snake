@@ -1,7 +1,6 @@
-from collections import deque
 from random import choice
 import time
-from interfaces import CommandResult, IBotCommand  # type: ignore
+from .interfaces import CommandResult, IBotCommand  # type: ignore
 
 class GameMoveTool(IBotCommand):
     @property
