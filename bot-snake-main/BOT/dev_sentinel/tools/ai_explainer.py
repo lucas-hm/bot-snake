@@ -15,12 +15,13 @@ class AIExplainerTool(IBotCommand):
             classes = [n.name for n in ast.walk(
                 tree) if isinstance(n, ast.ClassDef)]
 
+            funcs_str = ', '.join(funcs) if funcs else 'Ninguna'
+            classes_str = ', '.join(classes) if classes else 'Ninguna'
+
             explanation = (
                 "🤖 **Resumen del Asistente IA**\n"
-                f"• **Clases detectadas:** {
-                    ', '.join(classes) if classes else 'Ninguna'}\n"
-                f"• **Funciones principales:** {
-                    ', '.join(funcs) if funcs else 'Ninguna'}\n"
+                f"• **Clases detectadas:** {classes_str}\n"
+                f"• **Funciones principales:** {funcs_str}\n"
                 "• **Diagnóstico:** El código presenta una estructura coherente de Python."
             )
             return CommandResult(success=True, output=explanation, metadata={"type": "ai_response"})

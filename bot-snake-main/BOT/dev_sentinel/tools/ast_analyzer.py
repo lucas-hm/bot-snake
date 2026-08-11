@@ -21,8 +21,7 @@ class ASTMetricsAnalyzer(IBotCommand):
                 "classes_list": classes
             }
 
-            out_msg = f"Análisis AST exitoso. Clases: {
-                len(classes)}, Funciones: {len(functions)}."
+            out_msg = f"Análisis AST exitoso. Clases: {', '.join(classes) if classes else 'Ninguna'}, Funciones: {', '.join(functions) if functions else 'Ninguna'}."
             return CommandResult(success=True, output=out_msg, metadata=metrics)
 
         except SyntaxError as e:

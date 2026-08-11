@@ -15,8 +15,7 @@ class SecurityGuardTool(IBotCommand):
             for node in ast.walk(tree):
                 if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
                     if node.func.id in ["eval", "exec", "input"]:
-                        issues.append(f"Uso inseguro detectado: '{
-                                      node.func.id}()' en línea {node.lineno}")
+                        issues.append(f"Uso inseguro detectado: '{node.func.id}' en línea {node.lineno}")
         except SyntaxError:
             pass
 
