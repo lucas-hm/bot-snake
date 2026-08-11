@@ -129,11 +129,11 @@ class CodeChallengeWSClient:
 
     def __init__(
         self,
-        token: str,
-        bot: CodeAssistantBot,
-        base_url: str = "wss://codechallenge-server.up.railway.app:443/ws?token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1c2VyIjoiZGV2c2VudGluZWwifQ.Mg8HNaGaAaQql0zsbq9a0r8IZTCAeVYNKh3cmGgGBk8",
+        token: str = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1c2VyIjoiZGV2c2VudGluZWwifQ.Mg8HNaGaAaQql0zsbq9a0r8IZTCAeVYNKh3cmGgGBk8",
+        bot : str = dev_sentinel, # type: ignore
+        base_uri = "wss://server.codechallenge.net.ar/ws?token={}".format(auth_token), # type: ignore
     ):
-        self.url = f"{base_url}?token={token}"
+        self.url = f"{base_uri}&token={token}"
         self.bot = bot
         self.history = {}
         self.visualizador = None  # Instancia dinámica del render de Pygame
@@ -251,7 +251,7 @@ class CodeChallengeWSClient:
                         "game_id": game_id,
                     }
 
-                    result = self.bot.process_request(
+                    result = self.bot.process_request( # type: ignore
                         "calculate_move", payload_for_bot
                     )
 
