@@ -1,22 +1,25 @@
 import unittest
 from unittest.mock import MagicMock
-from interfaces import IBotCommand, CommandResult
-from bot import CodeAssistantBot
 
+import BOT.dev_sentinel.interfaces as interfaces
+from BOT.dev_sentinel import interfaces
+
+import BOT.dev_sentinel.bot as bot
+from BOT.dev_sentinel import bot
 
 class TestCodeAssistantBot(unittest.TestCase):
 
     def setUp(self):
         """Inicializa una nueva instancia del bot antes de cada prueba."""
-        self.bot = CodeAssistantBot("DevSentinelTest")
+        self.bot = bot.CodeAssistantBot("DevSentinelTest")
         
         # Mock de un comando para reutilizar en las pruebas
-        self.mock_command = MagicMock(spec=IBotCommand)
+        self.mock_command = MagicMock(spec=interfaces.IBotCommand)
         self.mock_command.name = "test_cmd"
 
     def test_init_default_name(self):
         """Verifica que el bot tome el nombre por defecto si no se pasa argumento."""
-        default_bot = CodeAssistantBot()
+        default_bot = bot.CodeAssistantBot()
         self.assertEqual(default_bot.bot_name, "DevSentinel")
 
     def test_init_custom_name(self):
@@ -38,7 +41,7 @@ class TestCodeAssistantBot(unittest.TestCase):
 
     def test_process_request_success(self):
         """Verifica que un comando registrado se ejecute y retorne el resultado esperado."""
-        expected_result = CommandResult(success=True, output="Éxito")
+        expected_result = interfaces.CommandResult(success=True, output="Éxito")
         self.mock_command.execute.return_value = expected_result
 
         self.bot.register_command(self.mock_command)
@@ -52,7 +55,7 @@ class TestCodeAssistantBot(unittest.TestCase):
 
     def test_process_request_with_kwargs(self):
         """Verifica que se transmitan argumentos nombrados adicionales (kwargs)."""
-        expected_result = CommandResult(success=True, output="Ok con kwargs")
+        expected_result = interfaces.CommandResult(success=True, output="Ok con kwargs")
         self.mock_command.execute.return_value = expected_result
 
         self.bot.register_command(self.mock_command)

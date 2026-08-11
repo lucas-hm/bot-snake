@@ -1,4 +1,4 @@
-from interfaces import IBotCommand, CommandResult
+from .interfaces import IBotCommand, CommandResult
 
 class CodeAssistantBot:
     def __init__(self, bot_name: str = "DevSentinel"):

@@ -1,3 +1,4 @@
+
 import unittest
 from unittest.mock import patch
 
@@ -15,14 +16,11 @@ class TestGameEngineCoverage(unittest.TestCase):
 
     def test_line_20_ascii_board_parsing(self):
         """Cubre la línea 20: cuando board es un string ASCII."""
-        with patch.object(self.tool, "_parse_ascii_board") as mock_parse:
-            mock_parse.return_value = {
-                "my_body": [[2, 2], [2, 1]],
-                "enemy_body": [],
-                "foods": [[2, 3]],
-                "width": 10,
-                "height": 10,
-            }
+        with patch.object(
+            self.tool,
+            "_parse_ascii_board",
+            create=True,
+        ) as mock_parse:
 
             payload = {
                 "game_id": "g1",
