@@ -131,7 +131,7 @@ class CodeChallengeWSClient:
         self,
         token: str = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1c2VyIjoiZGV2c2VudGluZWwifQ.Mg8HNaGaAaQql0zsbq9a0r8IZTCAeVYNKh3cmGgGBk8",
         bot = CodeAssistantBot,
-        base_uri = "wss://server.codechallenge.net.ar/ws?token={}".format(auth_token), # type: ignore
+        base_uri = "wss://server.codechallenge.net.ar/ws?token={}".format(self.auth_token), # type: ignore
     ):
         self.url = f"{base_uri}&token={token}"
         self.bot = bot
