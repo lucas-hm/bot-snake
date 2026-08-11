@@ -1,2 +1,4 @@
 websockets
 pygame
+pytest-cov
+coverage
