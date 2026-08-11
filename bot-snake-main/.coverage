@@ -1,0 +1,9 @@
+[report]
+exclude_lines =
+    # Ignorar métodos abstractos puros
+    @abstractmethod
+    pass
+    # Ignorar excepciones que nunca deberían ocurrir en interfaces
+    raise NotImplementedError
+    # Ignorar chequeos de type hinting (opcional, buena práctica)
+    if TYPE_CHECKING:

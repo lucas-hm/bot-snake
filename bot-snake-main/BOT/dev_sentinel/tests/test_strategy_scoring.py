@@ -7,7 +7,7 @@ class TestStrategyScoring(unittest.TestCase):
         self.engine = GameMoveTool()
 
     def test_score_move_prefers_aggressive_target_when_bot_has_advantage(self):
-        attack_score = self.engine._score_move(
+        attack_score = self.engine._score_move( # type: ignore
             move_name="UP",
             target=(5, 4),
             my_head=(5, 5),
@@ -24,7 +24,7 @@ class TestStrategyScoring(unittest.TestCase):
             attack_target=(5, 4),
             trap_targets=set(),
         )
-        survival_score = self.engine._score_move(
+        survival_score = self.engine._score_move( # type: ignore
             move_name="RIGHT",
             target=(6, 5),
             my_head=(5, 5),
@@ -45,7 +45,7 @@ class TestStrategyScoring(unittest.TestCase):
         self.assertGreater(attack_score, survival_score)
 
     def test_score_move_penalizes_enemy_danger_zones(self):
-        dangerous_score = self.engine._score_move(
+        dangerous_score = self.engine._score_move( # type: ignore
             move_name="UP",
             target=(5, 4),
             my_head=(5, 5),
@@ -62,7 +62,7 @@ class TestStrategyScoring(unittest.TestCase):
             attack_target=None,
             trap_targets=set(),
         )
-        safe_score = self.engine._score_move(
+        safe_score = self.engine._score_move( # type: ignore
             move_name="RIGHT",
             target=(6, 5),
             my_head=(5, 5),
