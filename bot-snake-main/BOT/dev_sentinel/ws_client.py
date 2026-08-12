@@ -12,7 +12,7 @@ except ImportError:
 
 from bot import CodeAssistantBot
 # Importamos Pygame para el renderer de interfaz gráfica
-import pygame
+import pygame # type: ignore
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("CodeChallengeWS")
