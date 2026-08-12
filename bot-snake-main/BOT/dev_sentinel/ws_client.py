@@ -10,7 +10,7 @@ try:
 except ImportError:
     websockets = None
 
-from bot import CodeAssistantBot
+from .bot import CodeAssistantBot
 # Importamos Pygame para el renderer de interfaz gráfica
 import pygame # type: ignore
 

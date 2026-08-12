@@ -1,7 +1,7 @@
 import asyncio
-from bot import CodeAssistantBot
-from ws_client import CodeChallengeWSClient
-from game_engine import GameMoveTool
+from .bot import CodeAssistantBot
+from .ws_client import CodeChallengeWSClient
+from .game_engine import GameMoveTool
 from tools.ast_analyzer import ASTMetricsAnalyzer
 from tools.security_tool import SecurityGuardTool
 

@@ -2,7 +2,7 @@ import json
 import time
 import urllib.error
 import urllib.request
-from game_engine import GameMoveTool
+from .game_engine import GameMoveTool
 
 
 def run_match_against_arena():
