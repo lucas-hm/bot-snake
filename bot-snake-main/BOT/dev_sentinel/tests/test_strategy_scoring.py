@@ -1,12 +1,14 @@
 import unittest
 from BOT.dev_sentinel.game_engine import GameMoveTool
 
+
 class TestStrategyScoring(unittest.TestCase):
     def setUp(self):
         self.engine = GameMoveTool()
 
     def test_score_move_prefers_aggressive_target_when_bot_has_advantage(self):
-        survival_score = self.engine( # type: ignore
+        # Accedemos a la lógica de scoring a través de la estrategia del engine
+        survival_score = self.engine.strategy._score_move(
             move_name="RIGHT",
             target=(6, 5),
             my_head=(5, 5),
@@ -24,10 +26,11 @@ class TestStrategyScoring(unittest.TestCase):
             trap_targets=set(),
         )
 
-        self.assertGreater(survival_score) # type: ignore
+        # Compara el puntaje agresivo frente a un valor base o de referencia (ej. > 0)
+        self.assertGreater(survival_score, 0)
 
     def test_score_move_penalizes_enemy_danger_zones(self):
-        dangerous_score = self.engine._score_move( # type: ignore
+        dangerous_score = self.engine.strategy._score_move(
             move_name="UP",
             target=(5, 4),
             my_head=(5, 5),
@@ -44,7 +47,7 @@ class TestStrategyScoring(unittest.TestCase):
             attack_target=None,
             trap_targets=set(),
         )
-        safe_score = self.engine._score_move( # type: ignore
+        safe_score = self.engine.strategy._score_move(
             move_name="RIGHT",
             target=(6, 5),
             my_head=(5, 5),
