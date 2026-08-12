@@ -2,7 +2,6 @@ import sys
 import pygame # type: ignore
 
 class VisualizadorPygame:
-
     def __init__(self, ancho_grid=20, alto_grid=20):
         pygame.init() # type: ignore
         # Definir colores
