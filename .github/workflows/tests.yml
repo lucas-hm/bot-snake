@@ -46,5 +46,5 @@ jobs:
       run: |
         if [ -f "run_local_match_with_bot.py" ]; then
           PYTHONPATH=. coverage run --source=BOT/dev_sentinel -m pytest ./BOT/dev_sentinel/tests
-          coverage report -m --omit="**/pygame.py,**/ws_client.py,**/main.py,**/client_runner.py"
+          coverage report -m --omit="**/juego.py,**/ws_client.py,**/main.py,**/client_runner.py"
         fi
