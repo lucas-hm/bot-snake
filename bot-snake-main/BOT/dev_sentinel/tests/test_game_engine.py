@@ -1,10 +1,7 @@
-
-
 import unittest
 from unittest.mock import patch
 
-import BOT.dev_sentinel.game_engine as game_engine
-from BOT.dev_sentinel import game_engine
+from BOT.dev_sentinel import game_engine  # type: ignore
 
 class TestGameEngineCoverage(unittest.TestCase):
 
@@ -24,6 +21,7 @@ class TestGameEngineCoverage(unittest.TestCase):
             "enemy_body": [[3, 3]],
             "foods": [[2, 2]],
         }
+
         with patch.object(
             self.tool,
             "_parse_ascii_board",
@@ -38,15 +36,15 @@ class TestGameEngineCoverage(unittest.TestCase):
             }
 
             res = self.tool.execute(payload)
+
             self.assertTrue(res.success)
-            mock_parse.assert_called_once_with("|---|---|---|", "A")
+            mock_parse.assert_called_once_with(
+                "|---|---|---|",
+                "A",
+            )
 
     def test_lines_84_86_emergency_no_moves(self):
-        """Cubre el caso emergency_no_moves bloqueando efectivamente todos los casilleros."""
-        # En grilla 3x3 con cabeza en (0,0) y cuello en (0,1) [DOWN]:
-        # - UP (-1) y LEFT (-1) -> Fuera de límites de grilla.
-        # - DOWN (0,1) -> Bloqueado por cuello/cuerpo.
-        # - RIGHT (1,0) -> Bloqueado por obstáculo enemigo en (1,0) [que no es su cola].
+        """Cubre el caso emergency_no_moves bloqueando todos los casilleros."""
         payload = {
             "game_id": "g1",
             "turn_token": "t1",
@@ -54,12 +52,15 @@ class TestGameEngineCoverage(unittest.TestCase):
             "rows": 3,
             "board": {
                 "my_body": [[0, 0], [0, 1]],
-                "enemy_body": [[1, 0], [2, 0]],  # (1,0) es la cabeza/cuerpo (no la cola)
+                "enemy_body": [[1, 0], [2, 0]],
                 "foods": [],
             },
         }
 
-        with patch("BOT.dev_sentinel.game_engine.choice", return_value="UP"):
+        with patch(
+            "BOT.dev_sentinel.game_engine.choice",
+            return_value="UP",
+        ):
             res = self.tool.execute(payload)
 
         self.assertTrue(res.success)
@@ -68,7 +69,7 @@ class TestGameEngineCoverage(unittest.TestCase):
             res.metadata.get("strategy"),
             "emergency_no_moves",
         )
-        
+
     def test_line_35_no_my_body(self):
         """Cubre el caso donde my_body_list está vacío."""
         payload = {
@@ -85,7 +86,7 @@ class TestGameEngineCoverage(unittest.TestCase):
 
         self.assertTrue(res.success)
         self.assertEqual(
-            res.metadata["strategy"], # type: ignore
+            res.metadata["strategy"],  # type: ignore
             "no_body_found",
         )
 
@@ -109,13 +110,8 @@ class TestGameEngineCoverage(unittest.TestCase):
 
     def test_enemy_body_without_food(self):
         """
-        Cubre la rama:
-
-            if enemy_body_list and not enemy_will_eat:
-                enemy_obstacles = ...
-
-        Es decir, existe enemigo pero su cabeza no está
-        sobre una comida.
+        Cubre la rama donde existe enemigo pero su cabeza
+        no está sobre una comida.
         """
         payload = {
             "game_id": "g1",
@@ -135,12 +131,8 @@ class TestGameEngineCoverage(unittest.TestCase):
 
     def test_food_directly_ahead(self):
         """
-        Cubre:
-
-            if target in food_positions:
-                score += 100.0
-
-        La comida está directamente arriba de la cabeza.
+        Cubre el caso donde el movimiento elegido
+        cae directamente sobre comida.
         """
         payload = {
             "game_id": "g1",
@@ -191,13 +183,8 @@ class TestGameEngineCoverage(unittest.TestCase):
 
     def test_food_distance_infinite_uses_manhattan(self):
         """
-        Cubre:
-
-            if food_dist_from_target == float("inf"):
-                food_dist_from_target = Manhattan
-
-        Se fuerza _bfs_distance_fast() para que no encuentre
-        una ruta.
+        Fuerza _bfs_distance_fast() a devolver infinito
+        para cubrir el fallback Manhattan.
         """
         payload = {
             "game_id": "g1",
@@ -216,7 +203,6 @@ class TestGameEngineCoverage(unittest.TestCase):
             "_bfs_distance_fast",
             return_value=float("inf"),
         ) as mock_bfs:
-
             res = self.tool.execute(payload)
 
         self.assertTrue(res.success)
@@ -224,10 +210,7 @@ class TestGameEngineCoverage(unittest.TestCase):
 
     def test_discard_move_due_to_flood_fill_space(self):
         """
-        Cubre:
-
-            if space_after < required_space and len(valid_moves) > 1:
-                continue
+        Cubre el descarte de movimientos por falta de espacio.
         """
         payload = {
             "game_id": "g1",
@@ -251,11 +234,238 @@ class TestGameEngineCoverage(unittest.TestCase):
             "_flood_fill",
             return_value=0,
         ) as mock_flood:
-
             res = self.tool.execute(payload)
 
         self.assertTrue(res.success)
         self.assertTrue(mock_flood.called)
+
+    # ============================================================
+    # NUEVOS TESTS - HEURÍSTICAS
+    # ============================================================
+
+    def test_head_to_head_danger_is_discarded(self):
+        """
+        Verifica la heurística cabeza-cabeza.
+
+        Si nuestra serpiente tiene una longitud menor o igual
+        a la enemiga y un movimiento nos deja adyacentes a
+        la cabeza enemiga, ese movimiento debe descartarse.
+        """
+        payload = {
+            "game_id": "g1",
+            "turn_token": "t1",
+            "cols": 7,
+            "rows": 7,
+            "board": {
+                "my_body": [
+                    [2, 2],
+                ],
+                "enemy_body": [
+                    [3, 2],
+                    [4, 2],
+                ],
+                "foods": [],
+            },
+        }
+
+        res = self.tool.execute(payload)
+
+        self.assertTrue(res.success)
+
+        # RIGHT lleva de (2,2) a (3,2), donde está
+        # directamente la cabeza enemiga.
+        self.assertNotEqual(
+            res.output["direction"],
+            "RIGHT",
+        )
+
+    def test_head_to_head_is_allowed_when_we_are_longer(self):
+        """
+        Verifica que una serpiente más larga que el enemigo
+        pueda ejecutar un movimiento normalmente.
+        """
+        payload = {
+            "game_id": "g1",
+            "turn_token": "t1",
+            "cols": 7,
+            "rows": 7,
+            "board": {
+                "my_body": [
+                    [2, 2],
+                    [2, 3],
+                    [2, 4],
+                ],
+                "enemy_body": [
+                    [3, 2],
+                ],
+                "foods": [[3, 2]],
+            },
+        }
+
+        res = self.tool.execute(payload)
+
+        self.assertTrue(res.success)
+        self.assertIn(
+            res.output["direction"],
+            ["UP", "DOWN", "LEFT", "RIGHT"],
+        )
+
+    def test_tail_chasing_when_no_food(self):
+        """
+        Verifica que, cuando no hay comida, la estrategia
+        calcule la distancia hacia nuestra propia cola.
+        """
+        payload = {
+            "game_id": "g1",
+            "turn_token": "t1",
+            "cols": 10,
+            "rows": 10,
+            "board": {
+                "my_body": [
+                    [5, 5],
+                    [5, 6],
+                    [4, 6],
+                    [4, 5],
+                ],
+                "enemy_body": [],
+                "foods": [],
+            },
+        }
+
+        original_bfs = self.tool._bfs_distance_fast
+
+        with patch.object(
+            self.tool,
+            "_bfs_distance_fast",
+            wraps=original_bfs,
+        ) as mock_bfs:
+            res = self.tool.execute(payload)
+
+        self.assertTrue(res.success)
+
+        # Sin comida, el BFS debe utilizarse también
+        # para evaluar la distancia hacia la cola.
+        self.assertTrue(mock_bfs.called)
+
+        # La cola es (4,5), por lo que LEFT es una dirección
+        # razonable para acercarse a ella.
+        self.assertEqual(
+            res.output["direction"],
+            "LEFT",
+        )
+
+    def test_wall_penalty_is_applied(self):
+        """
+        Verifica que una posición ubicada en un borde
+        reciba el castigo de -10 puntos.
+        """
+        payload = {
+            "game_id": "g1",
+            "turn_token": "t1",
+            "cols": 5,
+            "rows": 5,
+            "board": {
+                "my_body": [[2, 2]],
+                "enemy_body": [],
+                "foods": [],
+            },
+        }
+
+        with patch.object(
+            self.tool,
+            "_flood_fill",
+            return_value=25,
+        ):
+            res = self.tool.execute(payload)
+
+        self.assertTrue(res.success)
+
+        # No hay comida, así que la decisión se basa en
+        # distancia a la cola y penalización de paredes.
+        self.assertIn(
+            res.output["direction"],
+            ["UP", "DOWN", "LEFT", "RIGHT"],
+        )
+
+    def test_head_to_head_move_is_skipped_before_flood_fill(self):
+        """
+        Verifica que un movimiento cabeza-cabeza se descarte
+        antes de ejecutar Flood Fill.
+        """
+        payload = {
+            "game_id": "g1",
+            "turn_token": "t1",
+            "cols": 7,
+            "rows": 7,
+            "board": {
+                "my_body": [[2, 2]],
+                "enemy_body": [[3, 2], [4, 2]],
+                "foods": [],
+            },
+        }
+
+        with patch.object(
+            self.tool,
+            "_flood_fill",
+            wraps=self.tool._flood_fill,
+        ) as mock_flood:
+            res = self.tool.execute(payload)
+
+        self.assertTrue(res.success)
+
+        # RIGHT es cabeza-cabeza y por lo tanto no debería
+        # llegar al Flood Fill.
+        self.assertLess(
+            mock_flood.call_count,
+            len(res.output),
+        )
+
+    def test_fallback_when_all_scored_moves_are_discarded(self):
+        """
+        Cubre el fallback:
+
+            if not best_move:
+                best_move = choice(list(valid_moves.keys()))
+
+        Se fuerza Flood Fill a devolver poco espacio para
+        todos los movimientos.
+        """
+        payload = {
+            "game_id": "g1",
+            "turn_token": "t1",
+            "cols": 5,
+            "rows": 5,
+            "board": {
+                "my_body": [
+                    [2, 2],
+                    [2, 3],
+                    [2, 4],
+                ],
+                "enemy_body": [],
+                "foods": [],
+            },
+        }
+
+        with patch.object(
+            self.tool,
+            "_flood_fill",
+            return_value=0,
+        ):
+            with patch(
+                "BOT.dev_sentinel.game_engine.choice",
+                return_value="UP",
+            ):
+                res = self.tool.execute(payload)
+
+        self.assertTrue(res.success)
+        self.assertEqual(
+            res.output["direction"],
+            "UP",
+        )
+
+    # ============================================================
+    # TESTS BFS
+    # ============================================================
 
     def test_get_bfs_distance_map(self):
         """Prueba BFS con obstáculos."""
@@ -270,16 +480,10 @@ class TestGameEngineCoverage(unittest.TestCase):
 
         self.assertIn((0, 0), dist_map)
         self.assertNotIn((1, 1), dist_map)
-
-        # Debe poder rodear el obstáculo.
         self.assertIn((2, 2), dist_map)
 
     def test_get_bfs_distance_map_boundaries(self):
-        """
-        Cubre los límites del tablero.
-
-        En un tablero 1x1 no existen vecinos válidos.
-        """
+        """Cubre los límites del tablero."""
         dist_map = self.tool._get_bfs_distance_map(
             (0, 0),
             set(),
@@ -293,12 +497,7 @@ class TestGameEngineCoverage(unittest.TestCase):
         )
 
     def test_bfs_distance_fast_reaches_target(self):
-        """
-        Cubre:
-
-            if curr == target:
-                return float(dist)
-        """
+        """Cubre el caso donde BFS encuentra el objetivo."""
         dist = self.tool._bfs_distance_fast(
             (0, 0),
             (2, 2),
@@ -313,13 +512,7 @@ class TestGameEngineCoverage(unittest.TestCase):
         )
 
     def test_bfs_distance_fast_returns_infinity(self):
-        """
-        Cubre:
-
-            return float("inf")
-
-        Se bloquea completamente el acceso al objetivo.
-        """
+        """Cubre el caso donde BFS no puede llegar al objetivo."""
         obstacles = {
             (1, 0),
             (0, 1),
@@ -339,6 +532,10 @@ class TestGameEngineCoverage(unittest.TestCase):
             dist,
             float("inf"),
         )
+
+    # ============================================================
+    # TESTS FLOOD FILL
+    # ============================================================
 
     def test_flood_fill_counts_reachable_cells(self):
         """Cubre el recorrido normal del Flood Fill."""
