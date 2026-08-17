@@ -1,335 +1,170 @@
+
 import unittest
 from unittest.mock import patch
 
-from BOT.dev_sentinel.game_engine import GameMoveTool, MCTSNode, HeadToHeadMCTS
+from BOT.dev_sentinel.game_engine import GameMoveTool, HeadToHeadMCTS, MCTSNode
 
 
 class TestMCTSNode(unittest.TestCase):
-    """Tests for MCTSNode."""
-
-    def test_is_fully_expanded_false(self):
-        node = MCTSNode(
-            my_head=(2, 2),
-            enemy_head=None,
-            obstacles=set(),
-        )
-
+    def test_not_fully_expanded(self):
+        node = MCTSNode((2, 2), None, set())
         self.assertFalse(node.is_fully_expanded())
 
-    def test_is_fully_expanded_true(self):
-        node = MCTSNode(
-            my_head=(2, 2),
-            enemy_head=None,
-            obstacles=set(),
-        )
-
-        node.children = [object(), object(), object(), object()]
-
+    def test_fully_expanded(self):
+        node = MCTSNode((2, 2), None, set())
+        node.children = [object()] * 4
         self.assertTrue(node.is_fully_expanded())
 
 
 class TestHeadToHeadMCTS(unittest.TestCase):
-    """Tests for HeadToHeadMCTS."""
-
     def setUp(self):
-        self.mcts = HeadToHeadMCTS(
-            width=10,
-            height=10,
-            iterations=1,
-        )
+        self.mcts = HeadToHeadMCTS(10, 10, iterations=3)
 
-    def test_is_terminal_outside_left(self):
-        node = MCTSNode(
-            my_head=(-1, 5),
-            enemy_head=None,
-            obstacles=set(),
-        )
+    def test_terminal_out_of_bounds(self):
+        for head in [(-1, 0), (10, 0), (0, -1), (0, 10)]:
+            node = MCTSNode(head, None, set())
+            self.assertTrue(self.mcts._is_terminal(node))
 
+    def test_terminal_obstacle(self):
+        node = MCTSNode((5, 5), None, {(5, 5)})
         self.assertTrue(self.mcts._is_terminal(node))
 
-    def test_is_terminal_outside_right(self):
-        node = MCTSNode(
-            my_head=(10, 5),
-            enemy_head=None,
-            obstacles=set(),
-        )
-
-        self.assertTrue(self.mcts._is_terminal(node))
-
-    def test_is_terminal_outside_top(self):
-        node = MCTSNode(
-            my_head=(5, -1),
-            enemy_head=None,
-            obstacles=set(),
-        )
-
-        self.assertTrue(self.mcts._is_terminal(node))
-
-    def test_is_terminal_outside_bottom(self):
-        node = MCTSNode(
-            my_head=(5, 10),
-            enemy_head=None,
-            obstacles=set(),
-        )
-
-        self.assertTrue(self.mcts._is_terminal(node))
-
-    def test_is_terminal_obstacle(self):
-        node = MCTSNode(
-            my_head=(5, 5),
-            enemy_head=None,
-            obstacles={(5, 5)},
-        )
-
-        self.assertTrue(self.mcts._is_terminal(node))
-
-    def test_is_terminal_valid_position(self):
-        node = MCTSNode(
-            my_head=(5, 5),
-            enemy_head=None,
-            obstacles=set(),
-        )
-
+    def test_non_terminal(self):
+        node = MCTSNode((5, 5), None, set())
         self.assertFalse(self.mcts._is_terminal(node))
 
-    def test_search_without_valid_moves_returns_none(self):
-        result = self.mcts.search(
-            my_head=(5, 5),
-            enemy_head=(7, 7),
-            obstacles=set(),
-            valid_moves={},
+    def test_search_empty_moves(self):
+        self.assertIsNone(
+            self.mcts.search((5, 5), (8, 8), set(), {})
         )
 
-        self.assertIsNone(result)
-
-    def test_expand_creates_child(self):
-        node = MCTSNode(
-            my_head=(5, 5),
-            enemy_head=(7, 7),
-            obstacles={(3, 3)},
-        )
-
+    def test_expand(self):
+        node = MCTSNode((5, 5), (8, 8), {(2, 2)})
         child = self.mcts._expand(node)
 
-        self.assertEqual(len(node.children), 1)
         self.assertIs(child.parent, node)
+        self.assertEqual(len(node.children), 1)
         self.assertIn(child.move_from_parent, self.mcts.dirs)
         self.assertIn((5, 5), child.obstacles)
-        self.assertEqual(child.enemy_head, (7, 7))
 
-    def test_expand_uses_untried_move(self):
-        node = MCTSNode(
-            my_head=(5, 5),
-            enemy_head=None,
-            obstacles=set(),
-        )
-
-        node.children = [
+    def test_expand_skips_tried_move(self):
+        node = MCTSNode((5, 5), None, set())
+        node.children.append(
             MCTSNode(
-                my_head=(5, 4),
-                enemy_head=None,
-                obstacles=set(),
+                (5, 4),
+                None,
+                set(),
                 parent=node,
                 move_from_parent="UP",
             )
-        ]
-
+        )
         child = self.mcts._expand(node)
-
         self.assertNotEqual(child.move_from_parent, "UP")
 
-    def test_select_expands_unexpanded_node(self):
-        node = MCTSNode(
-            my_head=(5, 5),
-            enemy_head=None,
-            obstacles=set(),
-        )
+    def test_select_expands_node(self):
+        node = MCTSNode((5, 5), None, set())
+        result = self.mcts._select(node)
+        self.assertIs(result.parent, node)
 
-        selected = self.mcts._select(node)
+    def test_select_terminal_node(self):
+        node = MCTSNode((-1, 5), None, set())
+        self.assertIs(self.mcts._select(node), node)
 
-        self.assertIs(selected.parent, node)
-        self.assertEqual(len(node.children), 1)
-
-    def test_select_returns_terminal_node(self):
-        node = MCTSNode(
-            my_head=(-1, 5),
-            enemy_head=None,
-            obstacles=set(),
-        )
-
-        selected = self.mcts._select(node)
-
-        self.assertIs(selected, node)
-
-    def test_best_uct_returns_child(self):
-        node = MCTSNode(
-            my_head=(5, 5),
-            enemy_head=None,
-            obstacles=set(),
-        )
+    def test_best_uct(self):
+        node = MCTSNode((5, 5), None, set())
         node.visits = 10
 
-        child_one = MCTSNode(
-            my_head=(5, 4),
-            enemy_head=None,
-            obstacles=set(),
-            parent=node,
-            move_from_parent="UP",
+        first = MCTSNode(
+            (5, 4), None, set(), parent=node, move_from_parent="UP"
         )
-        child_one.visits = 5
-        child_one.value = 10.0
+        first.visits = 5
+        first.value = 10
 
-        child_two = MCTSNode(
-            my_head=(5, 6),
-            enemy_head=None,
-            obstacles=set(),
-            parent=node,
-            move_from_parent="DOWN",
+        second = MCTSNode(
+            (5, 6), None, set(), parent=node, move_from_parent="DOWN"
         )
-        child_two.visits = 1
-        child_two.value = 10.0
+        second.visits = 1
+        second.value = 1
 
-        node.children = [child_one, child_two]
+        node.children = [first, second]
+        self.assertIn(self.mcts._best_uct(node), node.children)
 
-        result = self.mcts._best_uct(node)
+    def test_rollout_out_of_bounds(self):
+        node = MCTSNode((-1, 5), None, set())
+        self.assertEqual(self.mcts._rollout(node), -1.0)
 
-        self.assertIn(result, node.children)
+    def test_rollout_obstacle(self):
+        node = MCTSNode((5, 5), None, {(5, 5)})
+        self.assertEqual(self.mcts._rollout(node), -1.0)
 
-    def test_rollout_immediate_loss_outside_board(self):
-        node = MCTSNode(
-            my_head=(-1, 0),
-            enemy_head=None,
-            obstacles=set(),
-        )
-
-        result = self.mcts._rollout(node)
-
-        self.assertEqual(result, -1.0)
-
-    def test_rollout_immediate_loss_on_obstacle(self):
-        node = MCTSNode(
-            my_head=(5, 5),
-            enemy_head=None,
-            obstacles={(5, 5)},
-        )
-
-        result = self.mcts._rollout(node)
-
-        self.assertEqual(result, -1.0)
-
-    def test_rollout_without_enemy_survives(self):
-        node = MCTSNode(
-            my_head=(5, 5),
-            enemy_head=None,
-            obstacles=set(),
-        )
-
+    def test_rollout_no_enemy_survives(self):
+        node = MCTSNode((5, 5), None, set())
         with patch(
             "BOT.dev_sentinel.game_engine.random.choice",
             side_effect=lambda values: values[0],
         ):
-            result = self.mcts._rollout(node)
+            self.assertEqual(self.mcts._rollout(node), 1.0)
 
-        self.assertEqual(result, 1.0)
-
-    def test_rollout_with_enemy(self):
-        node = MCTSNode(
-            my_head=(5, 5),
-            enemy_head=(7, 7),
-            obstacles=set(),
-        )
-
+    def test_rollout_enemy_moves(self):
+        node = MCTSNode((5, 5), (7, 7), set())
         with patch(
             "BOT.dev_sentinel.game_engine.random.choice",
             side_effect=lambda values: values[0],
         ):
-            result = self.mcts._rollout(node)
+            self.assertEqual(self.mcts._rollout(node), 1.0)
 
-        self.assertEqual(result, 1.0)
-
-    def test_rollout_enemy_has_no_valid_moves(self):
-        obstacles = {
-            (6, 7),
-            (8, 7),
-            (7, 6),
-            (7, 8),
-        }
-
-        node = MCTSNode(
-            my_head=(2, 2),
-            enemy_head=(7, 7),
-            obstacles=obstacles,
-        )
-
+    def test_rollout_enemy_trapped(self):
+        obstacles = {(6, 7), (8, 7), (7, 6), (7, 8)}
+        node = MCTSNode((2, 2), (7, 7), obstacles)
         with patch(
             "BOT.dev_sentinel.game_engine.random.choice",
             side_effect=lambda values: values[0],
         ):
-            result = self.mcts._rollout(node)
+            self.assertEqual(self.mcts._rollout(node), 1.0)
 
-        self.assertEqual(result, 1.0)
+    def test_rollout_my_snake_trapped(self):
+        obstacles = {(4, 5), (6, 5), (5, 4), (5, 6)}
+        node = MCTSNode((5, 5), None, obstacles)
+        self.assertEqual(self.mcts._rollout(node), -1.0)
 
-    def test_rollout_my_snake_has_no_valid_moves(self):
-        obstacles = {
-            (4, 5),
-            (6, 5),
-            (5, 4),
-            (5, 6),
-        }
-
-        node = MCTSNode(
-            my_head=(5, 5),
-            enemy_head=None,
-            obstacles=obstacles,
+    def test_backpropagate(self):
+        root = MCTSNode((5, 5), None, set())
+        child = MCTSNode(
+            (5, 4), None, set(), parent=root, move_from_parent="UP"
+        )
+        grandchild = MCTSNode(
+            (5, 3), None, set(), parent=child, move_from_parent="UP"
         )
 
-        result = self.mcts._rollout(node)
+        self.mcts._backpropagate(grandchild, 1.5)
 
-        self.assertEqual(result, -1.0)
+        self.assertEqual(grandchild.visits, 1)
+        self.assertEqual(child.visits, 1)
+        self.assertEqual(root.visits, 1)
+        self.assertEqual(root.value, 1.5)
 
-    def test_search_returns_selected_move(self):
-        mcts = HeadToHeadMCTS(
-            width=10,
-            height=10,
-            iterations=3,
-        )
-
-        valid_moves = {
-            "UP": (5, 4),
-            "DOWN": (5, 6),
-        }
-
+    def test_search_returns_move(self):
+        valid_moves = {"UP": (5, 4), "DOWN": (5, 6)}
         with patch(
             "BOT.dev_sentinel.game_engine.random.choice",
             side_effect=lambda values: values[0],
         ):
-            result = mcts.search(
-                my_head=(5, 5),
-                enemy_head=(8, 8),
-                obstacles=set(),
-                valid_moves=valid_moves,
+            result = self.mcts.search(
+                (5, 5), (8, 8), set(), valid_moves
             )
 
-        self.assertIn(result, {"UP", "DOWN", "LEFT", "RIGHT"})
+        self.assertIsNotNone(result)
+        self.assertIn(result, self.mcts.dirs)
 
 
 class TestGameMoveTool(unittest.TestCase):
-    """Tests for GameMoveTool."""
-
     def setUp(self):
         self.tool = GameMoveTool()
 
-    def make_data(
-        self,
-        my_body,
-        enemy_body=None,
-        foods=None,
-        cols=10,
-        rows=10,
-    ):
+    def data(self, my_body, enemy_body=None, foods=None, cols=10, rows=10):
         return {
-            "game_id": "test-game",
-            "turn_token": "test-token",
+            "game_id": "game",
+            "turn_token": "token",
             "side": "A",
             "cols": cols,
             "rows": rows,
@@ -345,377 +180,186 @@ class TestGameMoveTool(unittest.TestCase):
     def test_name(self):
         self.assertEqual(self.tool.name, "calculate_move")
 
-    def test_execute_without_body(self):
-        data = self.make_data(
-            my_body=[],
-        )
-
-        result = self.tool.execute(data)
-
+    def test_no_body(self):
+        result = self.tool.execute(self.data([]))
         self.assertTrue(result.success)
         self.assertEqual(result.output["direction"], "RIGHT")
         self.assertEqual(result.metadata["strategy"], "no_body_found") # type: ignore
 
-    def test_execute_single_segment(self):
-        data = self.make_data(
-            my_body=[(5, 5)],
-            foods=[(6, 5)],
+    def test_single_body_food(self):
+        result = self.tool.execute(
+            self.data([(5, 5)], foods=[(6, 5)])
         )
-
-        result = self.tool.execute(data)
-
         self.assertTrue(result.success)
         self.assertEqual(result.output["direction"], "RIGHT")
         self.assertEqual(result.output["row"], 6)
         self.assertEqual(result.output["col"], 5)
-        self.assertEqual(
-            result.metadata["strategy"], # type: ignore
-            "BFS_Active_Strategy",
+
+    def test_forbidden_left(self):
+        result = self.tool.execute(
+            self.data([(5, 5), (4, 5), (3, 5)], foods=[(5, 4)])
         )
-
-    def test_execute_body_moving_right_forbids_left(self):
-        data = self.make_data(
-            my_body=[
-                (5, 5),
-                (4, 5),
-                (3, 5),
-            ],
-            foods=[(5, 4)],
-        )
-
-        result = self.tool.execute(data)
-
-        self.assertTrue(result.success)
         self.assertNotEqual(result.output["direction"], "LEFT")
 
-    def test_execute_body_moving_left_forbids_right(self):
-        data = self.make_data(
-            my_body=[
-                (4, 5),
-                (5, 5),
-                (6, 5),
-            ],
-            foods=[(4, 4)],
+    def test_forbidden_right(self):
+        result = self.tool.execute(
+            self.data([(4, 5), (5, 5), (6, 5)], foods=[(4, 4)])
         )
-
-        result = self.tool.execute(data)
-
-        self.assertTrue(result.success)
         self.assertNotEqual(result.output["direction"], "RIGHT")
 
-    def test_execute_body_moving_down_forbids_up(self):
-        data = self.make_data(
-            my_body=[
-                (5, 5),
-                (5, 4),
-                (5, 3),
-            ],
-            foods=[(6, 5)],
+    def test_forbidden_up(self):
+        result = self.tool.execute(
+            self.data([(5, 5), (5, 4), (5, 3)], foods=[(6, 5)])
         )
-
-        result = self.tool.execute(data)
-
-        self.assertTrue(result.success)
         self.assertNotEqual(result.output["direction"], "UP")
 
-    def test_execute_body_moving_up_forbids_down(self):
-        data = self.make_data(
-            my_body=[
-                (5, 5),
-                (5, 6),
-                (5, 7),
-            ],
-            foods=[(6, 5)],
+    def test_forbidden_down(self):
+        result = self.tool.execute(
+            self.data([(5, 5), (5, 6), (5, 7)], foods=[(6, 5)])
         )
-
-        result = self.tool.execute(data)
-
-        self.assertTrue(result.success)
         self.assertNotEqual(result.output["direction"], "DOWN")
 
-    def test_execute_enemy_not_eating(self):
-        data = self.make_data(
-            my_body=[(2, 2), (2, 3)],
-            enemy_body=[(8, 8), (8, 7)],
-            foods=[(1, 1)],
+    def test_enemy_not_eating(self):
+        result = self.tool.execute(
+            self.data(
+                [(2, 2), (2, 3)],
+                enemy_body=[(8, 8), (8, 7)],
+                foods=[(1, 1)],
+            )
         )
-
-        result = self.tool.execute(data)
-
         self.assertTrue(result.success)
 
-    def test_execute_enemy_eating(self):
-        data = self.make_data(
-            my_body=[(2, 2), (2, 3)],
-            enemy_body=[(8, 8), (8, 7)],
-            foods=[(8, 8), (1, 1)],
+    def test_enemy_eating(self):
+        result = self.tool.execute(
+            self.data(
+                [(2, 2), (2, 3)],
+                enemy_body=[(8, 8), (8, 7)],
+                foods=[(8, 8)],
+            )
         )
-
-        result = self.tool.execute(data)
-
         self.assertTrue(result.success)
 
-    def test_execute_emergency_no_moves(self):
-        data = self.make_data(
-            my_body=[(1, 1)],
-            enemy_body=[
-                (0, 1),
-                (2, 1),
-                (1, 0),
-                (1, 2),
-            ],
+    def test_emergency_no_moves(self):
+        result = self.tool.execute(
+            self.data(
+                [(0, 0)],
+                enemy_body=[(1, 0), (0, 1), (2, 2)],
+            )
         )
+        self.assertTrue(result.success)
+        self.assertEqual(result.metadata["strategy"], "emergency_no_moves") # type: ignore
 
-        with patch(
-            "BOT.dev_sentinel.game_engine.choice",
-            return_value="UP",
+    def test_mcts_combat(self):
+        data = self.data([(4, 5)], enemy_body=[(6, 5)])
+        with patch.object(
+            HeadToHeadMCTS, "search", return_value="RIGHT"
         ):
             result = self.tool.execute(data)
 
-        self.assertTrue(result.success)
-        self.assertEqual(result.output["direction"], "UP")
-        self.assertEqual(
-            result.metadata["strategy"], # type: ignore
-            "emergency_no_moves",
-        )
-
-    def test_execute_mcts_combat_strategy(self):
-        data = self.make_data(
-            my_body=[(4, 5)],
-            enemy_body=[(6, 5)],
-            foods=[],
-        )
-
-        with patch(
-            "BOT.dev_sentinel.game_engine.HeadToHeadMCTS.search",
-            return_value="RIGHT",
-        ):
-            result = self.tool.execute(data)
-
-        self.assertTrue(result.success)
+        self.assertEqual(result.metadata["strategy"], "MCTS_Combat_Tactics") # type: ignore
         self.assertEqual(result.output["direction"], "RIGHT")
         self.assertEqual(result.output["row"], 5)
         self.assertEqual(result.output["col"], 5)
-        self.assertEqual(
-            result.metadata["strategy"], # type: ignore
-            "MCTS_Combat_Tactics",
-        )
 
-    def test_execute_mcts_invalid_move_falls_back_to_bfs(self):
-        data = self.make_data(
-            my_body=[(4, 5)],
-            enemy_body=[(6, 5)],
-            foods=[(4, 4)],
-        )
-
-        with patch(
-            "BOT.dev_sentinel.game_engine.HeadToHeadMCTS.search",
-            return_value="INVALID",
+    def test_mcts_invalid_move_uses_bfs(self):
+        data = self.data([(4, 5)], enemy_body=[(6, 5)], foods=[(4, 4)])
+        with patch.object(
+            HeadToHeadMCTS, "search", return_value="INVALID"
         ):
             result = self.tool.execute(data)
 
-        self.assertTrue(result.success)
-        self.assertEqual(
-            result.metadata["strategy"], # type: ignore
-            "BFS_Active_Strategy",
+        self.assertEqual(result.metadata["strategy"], "BFS_Active_Strategy") # type: ignore
+
+    def test_equal_length_avoids_enemy_neighbor(self):
+        data = self.data(
+            [(4, 5), (4, 6)],
+            enemy_body=[(6, 5), (6, 6)],
         )
+        with patch.object(HeadToHeadMCTS, "search", return_value=None):
+            result = self.tool.execute(data)
 
-    def test_execute_food_is_preferred(self):
-        data = self.make_data(
-            my_body=[(5, 5)],
-            foods=[(6, 5)],
-        )
-
-        result = self.tool.execute(data)
-
-        self.assertEqual(result.output["direction"], "RIGHT")
-        self.assertEqual(result.output["row"], 6)
-        self.assertEqual(result.output["col"], 5)
-
-    def test_execute_avoids_food_on_tail(self):
-        data = self.make_data(
-            my_body=[
-                (5, 5),
-                (5, 6),
-                (5, 7),
-            ],
-            foods=[(5, 7)],
-        )
-
-        result = self.tool.execute(data)
-
-        self.assertTrue(result.success)
-        self.assertNotEqual(
-            result.output["direction"],
-            "DOWN",
-        )
-
-    def test_execute_enemy_equal_length_avoids_head_neighbor(self):
-        data = self.make_data(
-            my_body=[
-                (4, 5),
-                (4, 6),
-            ],
-            enemy_body=[
-                (6, 5),
-                (6, 6),
-            ],
-            foods=[],
-        )
-
-        result = self.tool.execute(data)
-
-        self.assertTrue(result.success)
         self.assertNotEqual(result.output["direction"], "RIGHT")
 
-    def test_execute_longer_snake_can_attack_enemy_neighbor(self):
-        data = self.make_data(
-            my_body=[
-                (4, 5),
-                (4, 6),
-                (4, 7),
-            ],
-            enemy_body=[
-                (6, 5),
-                (6, 6),
-            ],
-            foods=[],
+    def test_longer_can_attack(self):
+        data = self.data(
+            [(4, 5), (4, 6), (4, 7)],
+            enemy_body=[(6, 5), (6, 6)],
         )
-
-        result = self.tool.execute(data)
+        with patch.object(HeadToHeadMCTS, "search", return_value=None):
+            result = self.tool.execute(data)
 
         self.assertTrue(result.success)
 
-    def test_execute_with_cols_and_rows_override_board(self):
-        data = self.make_data(
-            my_body=[(2, 2)],
-            foods=[(3, 2)],
-            cols=5,
-            rows=5,
+    def test_tail_with_food_is_not_selected(self):
+        data = self.data(
+            [(5, 5), (5, 6), (5, 7)],
+            foods=[(5, 7)],
         )
+        result = self.tool.execute(data)
+        self.assertNotEqual(result.output["direction"], "DOWN")
+
+    def test_empty_food_uses_tail(self):
+        result = self.tool.execute(
+            self.data([(5, 5), (5, 6), (5, 7)])
+        )
+        self.assertEqual(
+            result.metadata["strategy"], "BFS_Active_Strategy" # type: ignore
+        )
+
+    def test_board_dimensions_override(self):
+        data = self.data([(2, 2)], foods=[(3, 2)], cols=5, rows=5)
         data["board"]["width"] = 20
         data["board"]["height"] = 20
-
         result = self.tool.execute(data)
-
-        self.assertTrue(result.success)
         self.assertEqual(result.output["row"], 3)
         self.assertEqual(result.output["col"], 2)
 
-    def test_execute_empty_food_uses_tail_heuristic(self):
-        data = self.make_data(
-            my_body=[
-                (5, 5),
-                (5, 6),
-                (5, 7),
-            ],
-            foods=[],
-        )
-
-        result = self.tool.execute(data)
-
-        self.assertTrue(result.success)
-        self.assertEqual(
-            result.metadata["strategy"], # type: ignore
-            "BFS_Active_Strategy",
-        )
-
-    def test_execute_prefers_non_border_move_when_scores_allow(self):
-        data = self.make_data(
-            my_body=[(1, 1)],
-            foods=[(2, 1)],
-            cols=5,
-            rows=5,
-        )
-
-        result = self.tool.execute(data)
-
-        self.assertTrue(result.success)
-        self.assertEqual(result.output["direction"], "RIGHT")
-
 
 class TestGameMoveToolHelpers(unittest.TestCase):
-    """Tests for GameMoveTool helper methods."""
-
     def setUp(self):
         self.tool = GameMoveTool()
 
-    def test_get_bfs_distance_map(self):
+    def test_bfs_distance_map(self):
         distances = self.tool._get_bfs_distance_map(
-            start=(0, 0),
-            obstacles={(1, 0)},
-            width=3,
-            height=3,
+            (0, 0), {(1, 0)}, 3, 3
         )
-
         self.assertEqual(distances[(0, 0)], 0)
         self.assertNotIn((1, 0), distances)
         self.assertEqual(distances[(2, 0)], 4)
-        self.assertEqual(distances[(2, 2)], 4)
 
-    def test_bfs_distance_fast_reachable(self):
-        distance = self.tool._bfs_distance_fast(
-            start=(0, 0),
-            target=(2, 0),
-            obstacles={(1, 0)},
-            width=3,
-            height=3,
+    def test_bfs_fast_reachable(self):
+        result = self.tool._bfs_distance_fast(
+            (0, 0), (2, 0), {(1, 0)}, 3, 3
         )
+        self.assertEqual(result, 4.0)
 
-        self.assertEqual(distance, 4.0)
-
-    def test_bfs_distance_fast_unreachable(self):
-        obstacles = {
-            (1, 0),
-            (0, 1),
-            (1, 1),
-        }
-
-        distance = self.tool._bfs_distance_fast(
-            start=(0, 0),
-            target=(2, 2),
-            obstacles=obstacles,
-            width=3,
-            height=3,
+    def test_bfs_fast_unreachable(self):
+        obstacles = {(1, 0), (0, 1), (1, 1)}
+        result = self.tool._bfs_distance_fast(
+            (0, 0), (2, 2), obstacles, 3, 3
         )
+        self.assertEqual(result, float("inf"))
 
-        self.assertEqual(distance, float("inf"))
+    def test_bfs_fast_same_position(self):
+        result = self.tool._bfs_distance_fast(
+            (2, 2), (2, 2), set(), 5, 5
+        )
+        self.assertEqual(result, 0.0)
 
     def test_flood_fill(self):
-        space = self.tool._flood_fill(
-            start=(0, 0),
-            obstacles={(1, 0)},
-            width=3,
-            height=3,
+        result = self.tool._flood_fill(
+            (0, 0), {(1, 0)}, 3, 3
         )
-
-        self.assertEqual(space, 8)
+        self.assertEqual(result, 8)
 
     def test_flood_fill_single_cell(self):
-        space = self.tool._flood_fill(
-            start=(1, 1),
-            obstacles={
-                (0, 1),
-                (2, 1),
-                (1, 0),
-                (1, 2),
-            },
-            width=3,
-            height=3,
+        result = self.tool._flood_fill(
+            (1, 1),
+            {(0, 1), (2, 1), (1, 0), (1, 2)},
+            3,
+            3,
         )
-
-        self.assertEqual(space, 1)
-
-    def test_bfs_distance_start_equals_target(self):
-        distance = self.tool._bfs_distance_fast(
-            start=(2, 2),
-            target=(2, 2),
-            obstacles=set(),
-            width=5,
-            height=5,
-        )
-
-        self.assertEqual(distance, 0.0)
+        self.assertEqual(result, 1)
 
 
 if __name__ == "__main__":

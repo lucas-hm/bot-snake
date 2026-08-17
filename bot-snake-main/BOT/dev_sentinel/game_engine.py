@@ -3,12 +3,12 @@ import math
 import random
 from collections import deque
 from random import choice
-from typing import List, Tuple, Optional
+from typing import Optional, Tuple
 
-from .interfaces import CommandResult, IBotCommand  # type: ignore
+from .interfaces import CommandResult, IBotCommand   # type: ignore
 
 # =============================================================================
-# HELPER MCTS (Monte Carlo Tree Search)
+ # HELPER MCTS (Monte Carlo Tree Search)
 # =============================================================================
 class MCTSNode:
     def __init__(self, my_head: Tuple[int, int], enemy_head: Optional[Tuple[int, int]], obstacles: set, parent=None, move_from_parent=None):
@@ -36,20 +36,17 @@ class HeadToHeadMCTS():
             "LEFT": (-1, 0),
             "RIGHT": (1, 0)
         }
-        
     def _is_terminal(self, node: MCTSNode) -> bool:
         """Comprueba si el nodo representa un estado final (derrota/colisión)."""
         x, y = node.my_head
-        # Fuera de los límites del tablero
-        if not (0 <= x < self.width and 0 <= y < self.height): # type: ignore
+ # Fuera de los límites del tablero
+        if not (0 <= x < self.width and 0 <= y < self.height):  # type: ignore
             return True
-        # Colisión contra obstáculos o el propio cuerpo
+ # Colisión contra obstáculos o el propio cuerpo
         if node.my_head in node.obstacles:
             return True
         return False
-    
-    def search(self, my_head: Tuple[int, int], enemy_head: Tuple[int, int], 
-               obstacles: set, valid_moves: dict) -> Optional[str]:
+    def search(self, my_head: Tuple[int, int], enemy_head: Tuple[int, int], obstacles: set, valid_moves: dict) -> Optional[str]:
         if not valid_moves:
             return None
 
@@ -58,17 +55,25 @@ class HeadToHeadMCTS():
         for _ in range(self.iterations):
             node = self._select(root)
             reward = self._rollout(node)
-            self._backpropagate(node, reward) # type: ignore
+            self._backpropagate(node, reward)  # type: ignore
 
         if not root.children:
             return None
 
-        # Elegimos el movimiento con más visitas acumuladas
+ # Elegimos el movimiento con más visitas acumuladas
         best_child = max(root.children, key=lambda c: c.visits)
         return best_child.move_from_parent
 
+    def _backpropagate(self, node: MCTSNode, reward: float) -> None:
+        """Propaga el resultado de la simulación hasta la raíz."""
+        current = node
+        while current is not None:
+            current.visits += 1
+            current.value += reward
+            current = current.parent
+
     def _select(self, node: MCTSNode) -> MCTSNode:
-        while not self._is_terminal(node): # type: ignore
+        while not self._is_terminal(node):  # type: ignore
             if not node.is_fully_expanded():
                 return self._expand(node)
             else:
@@ -83,9 +88,9 @@ class HeadToHeadMCTS():
         dx, dy = self.dirs[move_name]
         new_my_head = (node.my_head[0] + dx, node.my_head[1] + dy)
 
-        # Crear nuevo nodo simulación
+ # Crear nuevo nodo simulación
         new_obstacles = set(node.obstacles)
-        new_obstacles.add(node.my_head)  # Mi cabeza previa se vuelve cuerpo/obstáculo
+        new_obstacles.add(node.my_head)   # Mi cabeza previa se vuelve cuerpo/obstáculo
 
         child = MCTSNode(
             my_head=new_my_head,
@@ -109,12 +114,12 @@ class HeadToHeadMCTS():
         curr_enemy = node.enemy_head
         curr_obs = set(node.obstacles)
 
-        # Simular 6 pasos rápidos hacia adelante
+ # Simular 6 pasos rápidos hacia adelante
         for _ in range(6):
             if not (0 <= curr_my[0] < self.width and 0 <= curr_my[1] < self.height) or curr_my in curr_obs:
-                return -1.0  # Derrota en la simulación
+                return -1.0   # Derrota en la simulación
 
-            # Generar movimientos posibles del enemigo
+ # Generar movimientos posibles del enemigo
             if curr_enemy:
                 enemy_valid = []
                 for dx, dy in self.dirs.values():
@@ -124,7 +129,7 @@ class HeadToHeadMCTS():
                 if enemy_valid:
                     curr_enemy = random.choice(enemy_valid)
 
-            # Mover a mi serpiente de forma aleatoria
+ # Mover a mi serpiente de forma aleatoria
             my_valid = []
             for dx, dy in self.dirs.values():
                 nxt_m = (curr_my[0] + dx, curr_my[1] + dy)
@@ -132,16 +137,16 @@ class HeadToHeadMCTS():
                     my_valid.append(nxt_m)
 
             if not my_valid:
-                return -1.0  # Quedé atrapado
+                return -1.0   # Quedé atrapado
 
             curr_obs.add(curr_my)
             curr_my = random.choice(my_valid)
 
-        return 1.0  # Supervivencia exitosa
+        return 1.0   # Supervivencia exitosa
 
 
 # =============================================================================
-# COMANDO PRINCIPAL CON INTEGRACIÓN DE MCTS Y BFS
+ # COMANDO PRINCIPAL CON INTEGRACIÓN DE MCTS Y BFS
 # =============================================================================
 class GameMoveTool(IBotCommand):
     @property
@@ -157,7 +162,7 @@ class GameMoveTool(IBotCommand):
         side = data.get("side", "A")
 
         if isinstance(board_raw, str):
-            board_info = self._parse_ascii_board(board_raw, side)  # type: ignore
+            board_info = self._parse_ascii_board(board_raw, side)   # type: ignore
         else:
             board_info = board_raw
 
@@ -211,7 +216,7 @@ class GameMoveTool(IBotCommand):
 
         obstacles = my_obstacles | enemy_obstacles
 
-        # Determinar dirección prohibida (cuello)
+ # Determinar dirección prohibida (cuello)
         forbidden_dir = None
 
         if len(my_body_list) >= 2:
@@ -234,7 +239,7 @@ class GameMoveTool(IBotCommand):
             "RIGHT": (my_head[0] + 1, my_head[1]),
         }
 
-        # Filtrar movimientos válidos inmediatos
+ # Filtrar movimientos válidos inmediatos
         valid_moves = {}
 
         for move_name, target in directions.items():
@@ -270,16 +275,15 @@ class GameMoveTool(IBotCommand):
                 },
             )
 
-        # ============================================================
-        # ACTIVACIÓN MCTS EN COMBATE DIRECTO (HEAD-ON-HEAD)
-        # ============================================================
+ # ============================================================
+ # ACTIVACIÓN MCTS EN COMBATE DIRECTO (HEAD-ON-HEAD)
+ # ============================================================
         mcts_strategy_used = False
         mcts_move = None
 
         if enemy_head:
             dist_to_enemy = abs(my_head[0] - enemy_head[0]) + abs(my_head[1] - enemy_head[1])
-            
-            # Si el enemigo está a 3 pasos o menos, MCTS toma el control táctico
+ # Si el enemigo está a 3 pasos o menos, MCTS toma el control táctico
             if dist_to_enemy <= 3:
                 mcts_engine = HeadToHeadMCTS(width=grid_width, height=grid_height, iterations=80)
                 mcts_move = mcts_engine.search(
@@ -312,9 +316,9 @@ class GameMoveTool(IBotCommand):
                 },
             )
 
-        # ============================================================
-        # BFS Y HEURÍSTICA ESTÁNDAR (Si no hay combate MCTS)
-        # ============================================================
+ # ============================================================
+ # BFS Y HEURÍSTICA ESTÁNDAR (Si no hay combate MCTS)
+ # ============================================================
 
         dist_map = self._get_bfs_distance_map(
             my_head,
