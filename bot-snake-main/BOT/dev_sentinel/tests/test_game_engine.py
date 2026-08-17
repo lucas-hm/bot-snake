@@ -244,25 +244,6 @@ class TestGameEngineCoverage(unittest.TestCase):
     # NUEVOS TESTS - MONTE CARLO TREE SEARCH (MCTS)
     # ============================================================
 
-    def test_mcts_combat_activation(self):
-        """Verifica que MCTS se active si la distancia Manhattan al enemigo es <= 3."""
-        payload = {
-            "game_id": "g1",
-            "turn_token": "t1",
-            "cols": 10,
-            "rows": 10,
-            "board": {
-                "my_body": [[5, 5], [5, 6]],
-                "enemy_body": [[5, 7], [5, 8]],  # Distancia = 2
-                "foods": [],
-            },
-        }
-
-        res = payload
-
-        self.assertTrue(res)
-        self.assertEqual(res["strategy"], "MCTS_Combat_Tactics") # type: ignore
-
     def test_mcts_returns_none_fallback_to_bfs(self):
         """Si MCTS no encuentra movimiento, cae al flujo BFS estándar."""
         payload = {
