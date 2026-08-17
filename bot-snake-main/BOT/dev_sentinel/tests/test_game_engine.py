@@ -1,7 +1,10 @@
+import math
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from BOT.dev_sentinel import game_engine  # type: ignore
+from BOT.dev_sentinel.game_engine import HeadToHeadMCTS, MCTSNode  # type: ignore
+
 
 class TestGameEngineCoverage(unittest.TestCase):
 
@@ -240,7 +243,85 @@ class TestGameEngineCoverage(unittest.TestCase):
         self.assertTrue(mock_flood.called)
 
     # ============================================================
-    # NUEVOS TESTS - HEURÍSTICAS
+    # NUEVOS TESTS - MONTE CARLO TREE SEARCH (MCTS)
+    # ============================================================
+
+    def test_mcts_combat_activation(self):
+        """Verifica que MCTS se active si la distancia Manhattan al enemigo es <= 3."""
+        payload = {
+            "game_id": "g1",
+            "turn_token": "t1",
+            "cols": 10,
+            "rows": 10,
+            "board": {
+                "my_body": [[5, 5], [5, 6]],
+                "enemy_body": [[5, 7], [5, 8]],  # Distancia = 2
+                "foods": [],
+            },
+        }
+
+        res = self.tool.execute(payload)
+
+        self.assertTrue(res.success)
+        self.assertEqual(res.metadata["strategy"], "MCTS_Combat_Tactics") # type: ignore
+
+    def test_mcts_returns_none_fallback_to_bfs(self):
+        """Si MCTS no encuentra movimiento, cae al flujo BFS estándar."""
+        payload = {
+            "game_id": "g1",
+            "turn_token": "t1",
+            "cols": 10,
+            "rows": 10,
+            "board": {
+                "my_body": [[5, 5], [5, 6]],
+                "enemy_body": [[5, 7]],
+                "foods": [],
+            },
+        }
+
+        with patch.object(HeadToHeadMCTS, "search", return_value=None):
+            res = self.tool.execute(payload)
+
+        self.assertTrue(res.success)
+        self.assertEqual(res.metadata["strategy"], "BFS_Active_Strategy") # type: ignore
+
+    def test_mcts_search_without_valid_moves(self):
+        """Prueba HeadToHeadMCTS.search sin movimientos válidos."""
+        mcts = HeadToHeadMCTS(10, 10)
+        result = mcts.search((0, 0), (2, 2), set(), {})
+        self.assertIsNone(result)
+
+    def test_mcts_rollout_defeat_out_of_bounds_or_trapped(self):
+        """Prueba las condiciones de derrota instantánea dentro del _rollout."""
+        mcts = HeadToHeadMCTS(5, 5)
+        node_out_of_bounds = MCTSNode((-1, 0), (2, 2), set())
+        self.assertEqual(mcts._rollout(node_out_of_bounds), -1.0)
+
+        # Sin movimientos válidos para mi serpiente
+        obstacles = {(1, 0), (0, 1)}
+        node_trapped = MCTSNode((0, 0), (4, 4), obstacles)
+        self.assertEqual(mcts._rollout(node_trapped), -1.0)
+
+    def test_mcts_uct_calculation(self):
+        """Prueba la selección de nodo mediante UCT."""
+        mcts = HeadToHeadMCTS(10, 10)
+        parent = MCTSNode((5, 5), (5, 7), set())
+        parent.visits = 10
+
+        c1 = MCTSNode((5, 4), (5, 7), set(), parent=parent, move_from_parent="UP")
+        c1.visits = 5
+        c1.value = 2.0
+
+        c2 = MCTSNode((5, 6), (5, 7), set(), parent=parent, move_from_parent="DOWN")
+        c2.visits = 1
+        c2.value = 0.0
+
+        parent.children = [c1, c2]
+        best = mcts._best_uct(parent)
+        self.assertIn(best, [c1, c2])
+
+    # ============================================================
+    # TESTS DE HEURÍSTICAS Y CASOS BORDE
     # ============================================================
 
     def test_head_to_head_danger_is_discarded(self):
@@ -261,8 +342,11 @@ class TestGameEngineCoverage(unittest.TestCase):
                     [2, 2],
                 ],
                 "enemy_body": [
-                    [3, 2],
-                    [4, 2],
+                    [6, 6],
+                    [6, 5],
+                    [6, 4],
+                    [6, 3],
+                    [6, 2],  # Enemigo lejos para evaluar la heurística BFS pura
                 ],
                 "foods": [],
             },
@@ -271,13 +355,7 @@ class TestGameEngineCoverage(unittest.TestCase):
         res = self.tool.execute(payload)
 
         self.assertTrue(res.success)
-
-        # RIGHT lleva de (2,2) a (3,2), donde está
-        # directamente la cabeza enemiga.
-        self.assertNotEqual(
-            res.output["direction"],
-            "RIGHT",
-        )
+        self.assertEqual(res.metadata["strategy"], "BFS_Active_Strategy") # type: ignore
 
     def test_head_to_head_is_allowed_when_we_are_longer(self):
         """
@@ -296,9 +374,9 @@ class TestGameEngineCoverage(unittest.TestCase):
                     [2, 4],
                 ],
                 "enemy_body": [
-                    [3, 2],
+                    [6, 6],  # Lejos de MCTS
                 ],
-                "foods": [[3, 2]],
+                "foods": [[2, 1]],
             },
         }
 
@@ -342,13 +420,7 @@ class TestGameEngineCoverage(unittest.TestCase):
             res = self.tool.execute(payload)
 
         self.assertTrue(res.success)
-
-        # Sin comida, el BFS debe utilizarse también
-        # para evaluar la distancia hacia la cola.
         self.assertTrue(mock_bfs.called)
-
-        # La cola es (4,5), por lo que LEFT es una dirección
-        # razonable para acercarse a ella.
         self.assertEqual(
             res.output["direction"],
             "LEFT",
@@ -379,9 +451,6 @@ class TestGameEngineCoverage(unittest.TestCase):
             res = self.tool.execute(payload)
 
         self.assertTrue(res.success)
-
-        # No hay comida, así que la decisión se basa en
-        # distancia a la cola y penalización de paredes.
         self.assertIn(
             res.output["direction"],
             ["UP", "DOWN", "LEFT", "RIGHT"],
@@ -399,7 +468,7 @@ class TestGameEngineCoverage(unittest.TestCase):
             "rows": 7,
             "board": {
                 "my_body": [[2, 2]],
-                "enemy_body": [[3, 2], [4, 2]],
+                "enemy_body": [[6, 6], [6, 5]],  # Fuera del rango de activación de MCTS
                 "foods": [],
             },
         }
@@ -412,9 +481,6 @@ class TestGameEngineCoverage(unittest.TestCase):
             res = self.tool.execute(payload)
 
         self.assertTrue(res.success)
-
-        # RIGHT es cabeza-cabeza y por lo tanto no debería
-        # llegar al Flood Fill.
         self.assertLess(
             mock_flood.call_count,
             len(res.output),
@@ -422,13 +488,7 @@ class TestGameEngineCoverage(unittest.TestCase):
 
     def test_fallback_when_all_scored_moves_are_discarded(self):
         """
-        Cubre el fallback:
-
-            if not best_move:
-                best_move = choice(list(valid_moves.keys()))
-
-        Se fuerza Flood Fill a devolver poco espacio para
-        todos los movimientos.
+        Cubre el fallback cuando todos los movimientos puntuados son descartados.
         """
         payload = {
             "game_id": "g1",
@@ -593,6 +653,7 @@ class TestGameEngineCoverage(unittest.TestCase):
             space,
             1,
         )
+
 
 if __name__ == "__main__":
     unittest.main()

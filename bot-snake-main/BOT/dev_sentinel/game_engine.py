@@ -1,9 +1,138 @@
+import time
+import math
+import random
 from collections import deque
 from random import choice
-import time
+from typing import List, Tuple, Optional
 
 from .interfaces import CommandResult, IBotCommand  # type: ignore
 
+# =============================================================================
+# HELPER MCTS (Monte Carlo Tree Search)
+# =============================================================================
+class MCTSNode:
+    def __init__(self, my_head: Tuple[int, int], enemy_head: Optional[Tuple[int, int]], 
+                 obstacles: set, parent=None, move_from_parent=None):
+        self.my_head = my_head
+        self.enemy_head = enemy_head
+        self.obstacles = set(obstacles)
+        self.parent = parent
+        self.move_from_parent = move_from_parent
+        self.children = []
+        self.visits = 0
+        self.value = 0.0
+
+    def is_fully_expanded(self) -> bool:
+        return len(self.children) == 4
+
+
+class HeadToHeadMCTS:
+    def __init__(self, width: int, height: int, iterations: int = 80):
+        self.width = width
+        self.height = height
+        self.iterations = iterations
+        self.dirs = {
+            "UP": (0, -1),
+            "DOWN": (0, 1),
+            "LEFT": (-1, 0),
+            "RIGHT": (1, 0)
+        }
+
+    def search(self, my_head: Tuple[int, int], enemy_head: Tuple[int, int], 
+               obstacles: set, valid_moves: dict) -> Optional[str]:
+        if not valid_moves:
+            return None
+
+        root = MCTSNode(my_head, enemy_head, obstacles)
+
+        for _ in range(self.iterations):
+            node = self._select(root)
+            reward = self._rollout(node)
+            self._backpropagate(node, reward) # type: ignore
+
+        if not root.children:
+            return None
+
+        # Elegimos el movimiento con más visitas acumuladas
+        best_child = max(root.children, key=lambda c: c.visits)
+        return best_child.move_from_parent
+
+    def _select(self, node: MCTSNode) -> MCTSNode:
+        while not self._is_terminal(node): # type: ignore
+            if not node.is_fully_expanded():
+                return self._expand(node)
+            else:
+                node = self._best_uct(node)
+        return node
+
+    def _expand(self, node: MCTSNode) -> MCTSNode:
+        tried_moves = {child.move_from_parent for child in node.children}
+        untried_moves = [m for m in self.dirs.keys() if m not in tried_moves]
+        move_name = untried_moves.pop()
+
+        dx, dy = self.dirs[move_name]
+        new_my_head = (node.my_head[0] + dx, node.my_head[1] + dy)
+
+        # Crear nuevo nodo simulación
+        new_obstacles = set(node.obstacles)
+        new_obstacles.add(node.my_head)  # Mi cabeza previa se vuelve cuerpo/obstáculo
+
+        child = MCTSNode(
+            my_head=new_my_head,
+            enemy_head=node.enemy_head,
+            obstacles=new_obstacles,
+            parent=node,
+            move_from_parent=move_name
+        )
+        node.children.append(child)
+        return child
+
+    def _best_uct(self, node: MCTSNode) -> MCTSNode:
+        log_n = math.log(node.visits + 1e-5)
+        return max(
+            node.children,
+            key=lambda c: (c.value / (c.visits + 1e-5)) + 1.41 * math.sqrt(log_n / (c.visits + 1e-5))
+        )
+
+    def _rollout(self, node: MCTSNode) -> float:
+        curr_my = node.my_head
+        curr_enemy = node.enemy_head
+        curr_obs = set(node.obstacles)
+
+        # Simular 6 pasos rápidos hacia adelante
+        for _ in range(6):
+            if not (0 <= curr_my[0] < self.width and 0 <= curr_my[1] < self.height) or curr_my in curr_obs:
+                return -1.0  # Derrota en la simulación
+
+            # Generar movimientos posibles del enemigo
+            if curr_enemy:
+                enemy_valid = []
+                for dx, dy in self.dirs.values():
+                    nxt_e = (curr_enemy[0] + dx, curr_enemy[1] + dy)
+                    if 0 <= nxt_e[0] < self.width and 0 <= nxt_e[1] < self.height and nxt_e not in curr_obs:
+                        enemy_valid.append(nxt_e)
+                if enemy_valid:
+                    curr_enemy = random.choice(enemy_valid)
+
+            # Mover a mi serpiente de forma aleatoria
+            my_valid = []
+            for dx, dy in self.dirs.values():
+                nxt_m = (curr_my[0] + dx, curr_my[1] + dy)
+                if 0 <= nxt_m[0] < self.width and 0 <= nxt_m[1] < self.height and nxt_m not in curr_obs:
+                    my_valid.append(nxt_m)
+
+            if not my_valid:
+                return -1.0  # Quedé atrapado
+
+            curr_obs.add(curr_my)
+            curr_my = random.choice(my_valid)
+
+        return 1.0  # Supervivencia exitosa
+
+
+# =============================================================================
+# COMANDO PRINCIPAL CON INTEGRACIÓN DE MCTS Y BFS
+# =============================================================================
 class GameMoveTool(IBotCommand):
     @property
     def name(self) -> str:
@@ -132,7 +261,49 @@ class GameMoveTool(IBotCommand):
             )
 
         # ============================================================
-        # BFS desde la cabeza para encontrar la comida más cercana
+        # ACTIVACIÓN MCTS EN COMBATE DIRECTO (HEAD-ON-HEAD)
+        # ============================================================
+        mcts_strategy_used = False
+        mcts_move = None
+
+        if enemy_head:
+            dist_to_enemy = abs(my_head[0] - enemy_head[0]) + abs(my_head[1] - enemy_head[1])
+            
+            # Si el enemigo está a 3 pasos o menos, MCTS toma el control táctico
+            if dist_to_enemy <= 3:
+                mcts_engine = HeadToHeadMCTS(width=grid_width, height=grid_height, iterations=80)
+                mcts_move = mcts_engine.search(
+                    my_head=my_head,
+                    enemy_head=enemy_head,
+                    obstacles=obstacles,
+                    valid_moves=valid_moves
+                )
+                if mcts_move and mcts_move in valid_moves:
+                    mcts_strategy_used = True
+
+        if mcts_strategy_used and mcts_move:
+            best_move = mcts_move
+            best_target = valid_moves[best_move]
+            elapsed_ms = (time.perf_counter() - start_time) * 1000
+
+            return CommandResult(
+                success=True,
+                output={
+                    "game_id": game_id,
+                    "turn_token": turn_token,
+                    "direction": best_move,
+                    "row": best_target[0],
+                    "col": best_target[1],
+                },
+                metadata={
+                    "strategy": "MCTS_Combat_Tactics",
+                    "chosen_move": best_move,
+                    "execution_time_ms": round(elapsed_ms, 4),
+                },
+            )
+
+        # ============================================================
+        # BFS Y HEURÍSTICA ESTÁNDAR (Si no hay combate MCTS)
         # ============================================================
 
         dist_map = self._get_bfs_distance_map(
@@ -156,10 +327,6 @@ class GameMoveTool(IBotCommand):
                 min_food_dist = distance
                 closest_food = food
 
-        # ============================================================
-        # Preparar posiciones peligrosas de la cabeza enemiga
-        # ============================================================
-
         enemy_head_neighbors = set()
 
         if enemy_head:
@@ -170,10 +337,6 @@ class GameMoveTool(IBotCommand):
                 (enemy_head[0], enemy_head[1] - 1),
             }
 
-        # ============================================================
-        # Evaluación de movimientos
-        # ============================================================
-
         scored_moves = {}
         best_move = None
         best_score = float("-inf")
@@ -181,26 +344,12 @@ class GameMoveTool(IBotCommand):
 
         for move_name, target in valid_moves.items():
 
-            # --------------------------------------------------------
-            # 1. PELIGRO CABEZA-CABEZA
-            #
-            # Si nuestra serpiente no es más larga que la enemiga,
-            # evitamos entrar en una casilla adyacente a su cabeza.
-            # --------------------------------------------------------
-
             if (
                 enemy_head
                 and target in enemy_head_neighbors
                 and len(my_body_list) <= len(enemy_body_list)
             ):
                 continue
-
-            # --------------------------------------------------------
-            # 2. FLOOD FILL
-            #
-            # Solo ejecutamos Flood Fill después de descartar
-            # movimientos obviamente peligrosos.
-            # --------------------------------------------------------
 
             space_after = self._flood_fill(
                 target,
@@ -213,10 +362,6 @@ class GameMoveTool(IBotCommand):
                 continue
 
             score = 0.0
-
-            # --------------------------------------------------------
-            # 3. COMIDA
-            # --------------------------------------------------------
 
             if target in food_positions:
                 score += 100.0
@@ -240,13 +385,6 @@ class GameMoveTool(IBotCommand):
                     max(0.0, 30.0 - food_dist_from_target) * 3.0
                 )
 
-            # --------------------------------------------------------
-            # 4. PERSECUCIÓN DE COLA
-            #
-            # Si no hay comida disponible, favorecemos movimientos
-            # que acerquen nuestra cabeza a nuestra cola.
-            # --------------------------------------------------------
-
             elif my_tail is not None:
                 tail_dist = self._bfs_distance_fast(
                     target,
@@ -264,13 +402,6 @@ class GameMoveTool(IBotCommand):
 
                 score += max(0.0, 20.0 - tail_dist) * 2.0
 
-            # --------------------------------------------------------
-            # 5. CASTIGO POR PAREDES
-            #
-            # Penalizamos posiciones en los bordes para mantener
-            # mayor libertad de movimiento.
-            # --------------------------------------------------------
-
             if (
                 target[0] == 0
                 or target[0] == grid_width - 1
@@ -284,11 +415,6 @@ class GameMoveTool(IBotCommand):
             if score > best_score:
                 best_score = score
                 best_move = move_name
-
-        # ============================================================
-        # Si todas las jugadas fueron descartadas por heurísticas
-        # de seguridad, elegimos una de las jugadas válidas originales.
-        # ============================================================
 
         if not best_move:
             best_move = choice(list(valid_moves.keys()))
@@ -313,13 +439,7 @@ class GameMoveTool(IBotCommand):
             },
         )
 
-    def _get_bfs_distance_map(
-        self,
-        start: tuple,
-        obstacles: set,
-        width: int,
-        height: int,
-    ) -> dict:
+    def _get_bfs_distance_map(self, start: tuple, obstacles: set, width: int, height: int) -> dict:
         queue = deque([(start, 0)])
         visited = {start: 0}
 
@@ -327,31 +447,15 @@ class GameMoveTool(IBotCommand):
             curr, dist = queue.popleft()
             x, y = curr
 
-            for nx, ny in [
-                (x + 1, y),
-                (x - 1, y),
-                (x, y + 1),
-                (x, y - 1),
-            ]:
-                if (
-                    0 <= nx < width
-                    and 0 <= ny < height
-                    and (nx, ny) not in obstacles
-                ):
+            for nx, ny in [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]:
+                if 0 <= nx < width and 0 <= ny < height and (nx, ny) not in obstacles:
                     if (nx, ny) not in visited:
                         visited[(nx, ny)] = dist + 1
                         queue.append(((nx, ny), dist + 1))
 
         return visited
 
-    def _bfs_distance_fast(
-        self,
-        start: tuple,
-        target: tuple,
-        obstacles: set,
-        width: int,
-        height: int,
-    ) -> float:
+    def _bfs_distance_fast(self, start: tuple, target: tuple, obstacles: set, width: int, height: int) -> float:
         queue = deque([(start, 0)])
         visited = set(obstacles)
         visited.add(start)
@@ -364,29 +468,14 @@ class GameMoveTool(IBotCommand):
 
             x, y = curr
 
-            for nx, ny in [
-                (x + 1, y),
-                (x - 1, y),
-                (x, y + 1),
-                (x, y - 1),
-            ]:
-                if (
-                    0 <= nx < width
-                    and 0 <= ny < height
-                    and (nx, ny) not in visited
-                ):
+            for nx, ny in [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]:
+                if 0 <= nx < width and 0 <= ny < height and (nx, ny) not in visited:
                     visited.add((nx, ny))
                     queue.append(((nx, ny), dist + 1))
 
         return float("inf")
 
-    def _flood_fill(
-        self,
-        start: tuple,
-        obstacles: set,
-        width: int,
-        height: int,
-    ) -> int:
+    def _flood_fill(self, start: tuple, obstacles: set, width: int, height: int) -> int:
         visited = set(obstacles)
         visited.add(start)
 
@@ -397,17 +486,8 @@ class GameMoveTool(IBotCommand):
             x, y = queue.popleft()
             space_count += 1
 
-            for nx, ny in [
-                (x + 1, y),
-                (x - 1, y),
-                (x, y + 1),
-                (x, y - 1),
-            ]:
-                if (
-                    0 <= nx < width
-                    and 0 <= ny < height
-                    and (nx, ny) not in visited
-                ):
+            for nx, ny in [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]:
+                if 0 <= nx < width and 0 <= ny < height and (nx, ny) not in visited:
                     visited.add((nx, ny))
                     queue.append((nx, ny))
 

@@ -15,10 +15,10 @@ sys.path.insert(0, os.path.join(os.getcwd(), "BOT", "dev_sentinel"))
 from BOT.dev_sentinel.game_engine import GameMoveTool
 
 # URL del servidor WebSocket para el test de Ping
-WS_URL = "wss://codechallenge-server.up.railway.app/ws"
+WS_URL = "wss://server.codechallenge.net.ar/ws?token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1c2VyIjoiZGV2c2VudGluZWwifQ.Mg8HNaGaAaQql0zsbq9a0r8IZTCAeVYNKh3cmGgGBk8"
 
 
-async def test_ping(num_samples=10):
+async def test_ping(num_samples=1000):
     """Mide el tiempo de viaje de ida y vuelta (RTT/Ping) hacia el servidor WSS."""
     if websockets is None:
         print("\n⚠️ No se pudo ejecutar el test de Ping: falta instalar 'websockets'")
@@ -99,10 +99,10 @@ def measure_bot_performance(N=1000):
 
 async def main():
     # 1. Medir latencia de red WebSocket
-    await test_ping(num_samples=10)
+    await test_ping(num_samples=1000)
 
     # 2. Medir velocidad local del bot
-    measure_bot_performance(N=500)
+    measure_bot_performance(N=1000)
 
 
 if __name__ == "__main__":
