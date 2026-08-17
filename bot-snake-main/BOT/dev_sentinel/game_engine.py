@@ -11,8 +11,7 @@ from .interfaces import CommandResult, IBotCommand  # type: ignore
 # HELPER MCTS (Monte Carlo Tree Search)
 # =============================================================================
 class MCTSNode:
-    def __init__(self, my_head: Tuple[int, int], enemy_head: Optional[Tuple[int, int]], 
-                 obstacles: set, parent=None, move_from_parent=None):
+    def __init__(self, my_head: Tuple[int, int], enemy_head: Optional[Tuple[int, int]], obstacles: set, parent=None, move_from_parent=None):
         self.my_head = my_head
         self.enemy_head = enemy_head
         self.obstacles = set(obstacles)
@@ -42,7 +41,7 @@ class HeadToHeadMCTS():
         """Comprueba si el nodo representa un estado final (derrota/colisión)."""
         x, y = node.my_head
         # Fuera de los límites del tablero
-        if not (0 <= x < self.cols and 0 <= y < self.rows): # type: ignore
+        if not (0 <= x < self.width and 0 <= y < self.height): # type: ignore
             return True
         # Colisión contra obstáculos o el propio cuerpo
         if node.my_head in node.obstacles:
