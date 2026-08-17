@@ -261,7 +261,7 @@ class TestGameEngineCoverage(unittest.TestCase):
         res = payload
 
         self.assertTrue(res)
-        self.assertEqual(res.metadata["strategy"], "MCTS_Combat_Tactics") # type: ignore
+        self.assertEqual(res["strategy"], "MCTS_Combat_Tactics") # type: ignore
 
     def test_mcts_returns_none_fallback_to_bfs(self):
         """Si MCTS no encuentra movimiento, cae al flujo BFS estándar."""
