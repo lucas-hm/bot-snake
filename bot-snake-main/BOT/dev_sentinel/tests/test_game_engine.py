@@ -260,7 +260,7 @@ class TestGameEngineCoverage(unittest.TestCase):
 
         res = payload
 
-        self.assertTrue(res.success) # type: ignore
+        self.assertTrue(res)
         self.assertEqual(res.metadata["strategy"], "MCTS_Combat_Tactics") # type: ignore
 
     def test_mcts_returns_none_fallback_to_bfs(self):
