@@ -26,7 +26,7 @@ class MCTSNode:
         return len(self.children) == 4
 
 
-class HeadToHeadMCTS:
+class HeadToHeadMCTS():
     def __init__(self, width: int, height: int, iterations: int = 80):
         self.width = width
         self.height = height
@@ -37,7 +37,18 @@ class HeadToHeadMCTS:
             "LEFT": (-1, 0),
             "RIGHT": (1, 0)
         }
-
+        
+    def _is_terminal(self, node: MCTSNode) -> bool:
+        """Comprueba si el nodo representa un estado final (derrota/colisión)."""
+        x, y = node.my_head
+        # Fuera de los límites del tablero
+        if not (0 <= x < self.cols and 0 <= y < self.rows): # type: ignore
+            return True
+        # Colisión contra obstáculos o el propio cuerpo
+        if node.my_head in node.obstacles:
+            return True
+        return False
+    
     def search(self, my_head: Tuple[int, int], enemy_head: Tuple[int, int], 
                obstacles: set, valid_moves: dict) -> Optional[str]:
         if not valid_moves:

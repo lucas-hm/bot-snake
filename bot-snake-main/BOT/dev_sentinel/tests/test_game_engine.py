@@ -5,9 +5,7 @@ from unittest.mock import MagicMock, patch
 from BOT.dev_sentinel import game_engine  # type: ignore
 from BOT.dev_sentinel.game_engine import HeadToHeadMCTS, MCTSNode  # type: ignore
 
-
 class TestGameEngineCoverage(unittest.TestCase):
-
     def setUp(self):
         self.tool = game_engine.GameMoveTool()
 
