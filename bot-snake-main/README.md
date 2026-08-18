@@ -3,6 +3,8 @@ este es un bot de snake a traves de websockets
 
 ejecutar con:
     #bash
+        pip install requirements.txt
         sudo nice -n -20 python3 main.py
         py run_local_match_with_bot.py  
-        py .\debug_tie.py  
+        py .\debug_tie.py
+        python3 -m BOT.dev_sentinel.main

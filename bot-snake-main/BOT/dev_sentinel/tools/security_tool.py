@@ -1,6 +1,6 @@
 import ast
 import re
-from interfaces import IBotCommand, CommandResult
+from ..interfaces import IBotCommand, CommandResult
 
 
 class SecurityGuardTool(IBotCommand):

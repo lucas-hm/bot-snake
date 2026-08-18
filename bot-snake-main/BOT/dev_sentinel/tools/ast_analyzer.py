@@ -1,5 +1,5 @@
 import ast
-from interfaces import IBotCommand, CommandResult
+from ..interfaces import IBotCommand, CommandResult
 
 class ASTMetricsAnalyzer(IBotCommand):
     @property

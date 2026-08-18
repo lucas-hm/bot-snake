@@ -3,8 +3,8 @@ from .bot import CodeAssistantBot
 from .ws_client import CodeChallengeWSClient
 from .game_engine import GameMoveTool
 from .rules import GameRules
-from tools.ast_analyzer import ASTMetricsAnalyzer
-from tools.security_tool import SecurityGuardTool
+from .tools.ast_analyzer import ASTMetricsAnalyzer
+from .tools.security_tool import SecurityGuardTool
 
 def build_bot() -> CodeAssistantBot:
     bot = CodeAssistantBot("DevSentinel")

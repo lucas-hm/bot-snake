@@ -1,42 +1,45 @@
 import asyncio
 import json
 import logging
+import os
 import sys
 import time
-import os
 
 try:
     import websockets  # type: ignore
 except ImportError:
     websockets = None
 
+import pygame  # type: ignore
 from .bot import CodeAssistantBot
-# Importamos Pygame para el renderer de interfaz gráfica
-import pygame # type: ignore
+from .rules import GameRules
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("CodeChallengeWS")
 
 
 class VisualizadorPygame:
-
     def __init__(self, ancho_grid=20, alto_grid=20):
         pygame.init()  # type: ignore
+
         self.COLOR_FONDO = (20, 20, 20)
-        self.COLOR_MANZANA = (255, 50, 50)  # Rojo
-        self.COLOR_DEV = (0, 230, 0)  # Verde
-        self.COLOR_RIVAL = (50, 150, 255)  # Azul
-        self.COLOR_COLA_PEQUENA = (255, 0, 0)  # Rojo cola
+        self.COLOR_MANZANA = (255, 50, 50)
+        self.COLOR_DEV = (0, 230, 0)
+        self.COLOR_RIVAL = (50, 150, 255)
+        self.COLOR_COLA_PEQUENA = (255, 0, 0)
 
         self.ancho_pantalla = 1920
         self.alto_pantalla = 1080
 
         self.tam_celda = min(
-            self.ancho_pantalla // ancho_grid, self.alto_pantalla // alto_grid
+            self.ancho_pantalla // ancho_grid,
+            self.alto_pantalla // alto_grid,
         )
+
         self.margen_x = (
             self.ancho_pantalla - (ancho_grid * self.tam_celda)
         ) // 2
+
         self.margen_y = (
             self.alto_pantalla - (alto_grid * self.tam_celda)
         ) // 2
@@ -44,7 +47,10 @@ class VisualizadorPygame:
         self.screen = pygame.display.set_mode(  # type: ignore
             (self.ancho_pantalla, self.alto_pantalla)
         )
-        pygame.display.set_caption("Partida Bot Snake - dev_sentinel")  # type: ignore
+
+        pygame.display.set_caption(  # type: ignore
+            "Partida Bot Snake - dev_sentinel"
+        )
 
     def renderizar(self, estado):
         for event in pygame.event.get():  # type: ignore
@@ -54,9 +60,10 @@ class VisualizadorPygame:
 
         self.screen.fill(self.COLOR_FONDO)
 
-        # Dibujar Manzana
+        # Dibujar manzana.
         if "apple" in estado and estado["apple"]:
             ax, ay = estado["apple"]
+
             pygame.draw.rect(  # type: ignore
                 self.screen,
                 self.COLOR_MANZANA,
@@ -75,15 +82,17 @@ class VisualizadorPygame:
         len_rival = len(cuerpo_rival)
 
         serpiente_pequena = None
+
         if len_dev > 0 and len_rival > 0:
             if len_dev < len_rival:
                 serpiente_pequena = "dev_sentinel"
             elif len_rival < len_dev:
                 serpiente_pequena = "rival_bot"
 
-        # Dibujar dev_sentinel (Verde)
+        # Dibujar dev_sentinel.
         for i, segment in enumerate(cuerpo_dev):
             color = self.COLOR_DEV
+
             if (
                 serpiente_pequena == "dev_sentinel"
                 and i == len_dev - 1
@@ -102,9 +111,10 @@ class VisualizadorPygame:
                 ),
             )
 
-        # Dibujar Bot Rival (Azul)
+        # Dibujar bot rival.
         for i, segment in enumerate(cuerpo_rival):
             color = self.COLOR_RIVAL
+
             if (
                 serpiente_pequena == "rival_bot"
                 and i == len_rival - 1
@@ -127,20 +137,33 @@ class VisualizadorPygame:
 
 
 class CodeChallengeWSClient:
-
     def __init__(
         self,
-        token: str = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1c2VyIjoiZGV2c2VudGluZWwifQ.Mg8HNaGaAaQql0zsbq9a0r8IZTCAeVYNKh3cmGgGBk8",
-        bot = CodeAssistantBot,
+        token: str = "",
+        bot=None,
         auth_token: str | None = None,
+        rules: GameRules | None = None,
     ):
         final_token = auth_token or os.getenv("AUTH_TOKEN", token)
-        self.url = f"wss://server.codechallenge.net.ar/ws?token={final_token}"
-        self.bot = bot
-        self.history = {}
-        self.visualizador = None  # Instancia dinámica del render de Pygame
 
-    def _log_event(self, game_id: str, message: dict, direction: str = "<"):
+        self.url = (
+            "wss://server.codechallenge.net.ar/ws"
+            f"?token={final_token}"
+        )
+
+        self.bot = bot or CodeAssistantBot
+        self.rules = rules
+
+        self.history = {}
+        self.visualizador = None
+        self.target_game_id = None
+
+    def _log_event(
+        self,
+        game_id: str,
+        message: dict,
+        direction: str = "<",
+    ):
         self.history.setdefault(game_id, []).append(
             f"{direction} {json.dumps(message)}"
         )
@@ -148,92 +171,224 @@ class CodeChallengeWSClient:
     def _write_game_log(self, game_id: str):
         try:
             with open(f"game_{game_id}.log", "w") as f:
-                f.write("\n".join(self.history.get(game_id, [])) + "\n")
-            logger.info(f"💾 Log guardado: game_{game_id}.log")
+                f.write(
+                    "\n".join(
+                        self.history.get(game_id, [])
+                    )
+                    + "\n"
+                )
+
+            logger.info(
+                "💾 Log guardado: game_%s.log",
+                game_id,
+            )
+
         except OSError as e:
-            logger.error(f"Error escribiendo log: {e}")
+            logger.error(
+                "Error escribiendo log: %s",
+                e,
+            )
 
-    async def send_action(self, ws, action: str, data: dict):
-        payload = {"action": action, "data": data}
-        logger.info(f"> {json.dumps(payload)}")
-        await ws.send(json.dumps(payload))
+    async def send_action(
+        self,
+        ws,
+        action: str,
+        data: dict,
+    ):
+        payload = {
+            "action": action,
+            "data": data,
+        }
 
-    async def join_game(self, ws, game_id: str):
-        """Envía la orden para unirse activamente a una partida existente."""
-        payload = {"action": "join_game", "data": {"game_id": game_id}}
-        logger.info(f"Uniéndose a la partida {game_id}...")
-        await self.send_action(ws, payload["action"], payload["data"])
+        logger.info(
+            "> %s",
+            json.dumps(payload),
+        )
+
+        await ws.send(
+            json.dumps(payload)
+        )
+
+    async def join_game(
+        self,
+        ws,
+        game_id: str,
+    ):
+        """Envía la orden para unirse a una partida existente."""
+        payload = {
+            "action": "join_game",
+            "data": {
+                "game_id": game_id,
+            },
+        }
+
+        logger.info(
+            "Uniéndose a la partida %s...",
+            game_id,
+        )
+
+        await self.send_action(
+            ws,
+            payload["action"],
+            payload["data"],
+        )
 
     async def start(self):
         if websockets is None:
-            logger.error("Instalá websockets...")
+            logger.error(
+                "Instalá websockets antes de ejecutar el cliente."
+            )
             return
 
         while True:
             try:
-                logger.info(f"Conectando a {self.url}...")
-                async with websockets.connect(self.url) as ws:
-                    logger.info("¡Conexión READY!")
+                logger.info(
+                    "Conectando a %s...",
+                    self.url,
+                )
 
-                    if (
-                        hasattr(self, "target_game_id") and self.target_game_id  # type: ignore
-                    ):  # type: ignore
-                        await self.send_action(ws, "join_game", {"game_id": self.target_game_id})  # type: ignore
+                async with websockets.connect(self.url) as ws:
+                    logger.info(
+                        "¡Conexión READY!"
+                    )
+
+                    if self.target_game_id:
+                        await self.send_action(
+                            ws,
+                            "join_game",
+                            {
+                                "game_id": self.target_game_id,
+                            },
+                        )
 
                     await self._listen_loop(ws)
+
             except KeyboardInterrupt:
+                logger.info(
+                    "Cliente detenido."
+                )
                 break
+
             except Exception as e:
-                logger.error(f"Connection error: {e}")
+                logger.error(
+                    "Connection error: %s",
+                    e,
+                )
+
                 await asyncio.sleep(3)
 
     async def _listen_loop(self, ws):
         async for raw_message in ws:
             try:
-                logger.info(f"< {raw_message}")
-                request_data = json.loads(raw_message)
-                event = request_data.get("event")
+                logger.info(
+                    "< %s",
+                    raw_message,
+                )
 
-                # Evento: Desafío entrante
+                request_data = json.loads(
+                    raw_message
+                )
+
+                event = request_data.get(
+                    "event"
+                )
+
+                # Evento: desafío entrante.
                 if event == "challenge":
-                    data = request_data.get("data", {})
+                    data = request_data.get(
+                        "data",
+                        {},
+                    )
+
                     await self.send_action(
                         ws,
                         "accept_challenge",
-                        {"challenge_id": data.get("challenge_id")},
+                        {
+                            "challenge_id": data.get(
+                                "challenge_id"
+                            )
+                        },
                     )
 
-                # Evento: Tu turno
+                # Evento: turno del bot.
                 elif event == "your_turn":
-                    # ⏱️ 1. Iniciar reloj al recibir el mensaje de la red
                     t_start = time.perf_counter()
 
-                    data = request_data.get("data", {})
-                    game_id = request_data.get("game_id") or data.get("game_id")
-                    turn_token = request_data.get("turn_token") or data.get(
-                        "turn_token"
+                    data = request_data.get(
+                        "data",
+                        {},
                     )
-                    board = data.get("board") or {}
-                    side = data.get("side")
-                    rows = data.get("rows", 20)
-                    cols = data.get("cols", 20)
-                    remaining_moves = data.get("remaining_moves")
 
-                    self._log_event(game_id, request_data, "<")
+                    game_id = (
+                        request_data.get("game_id")
+                        or data.get("game_id")
+                    )
 
-                    # 1. Crear ventana gráfica de Pygame si aún no existe
+                    turn_token = (
+                        request_data.get("turn_token")
+                        or data.get("turn_token")
+                    )
+
+                    board = data.get(
+                        "board"
+                    ) or {}
+
+                    side = data.get(
+                        "side"
+                    )
+
+                    rows = data.get(
+                        "rows",
+                        20,
+                    )
+
+                    cols = data.get(
+                        "cols",
+                        20,
+                    )
+
+                    remaining_moves = data.get(
+                        "remaining_moves"
+                    )
+
+                    self._log_event(
+                        game_id,
+                        request_data,
+                        "<",
+                    )
+
+                    # Crear ventana gráfica si todavía no existe.
                     if self.visualizador is None:
                         self.visualizador = VisualizadorPygame(
-                            ancho_grid=cols, alto_grid=rows
+                            ancho_grid=cols,
+                            alto_grid=rows,
                         )
 
-                    # 2. Extraer posiciones del 'board' para renderizar
-                    mi_cuerpo = board.get("my_snake") or board.get(side) or []
-                    rival_side = "P2" if side == "P1" else "P1"
-                    cuerpo_rival = board.get("enemy_snake") or board.get(rival_side) or []
-                    manzana = board.get("apple") or board.get("food")
+                    # Extraer posiciones del tablero.
+                    mi_cuerpo = (
+                        board.get("my_snake")
+                        or board.get(side)
+                        or []
+                    )
 
-                    # 3. Renderizar tablero en pantalla
+                    rival_side = (
+                        "P2"
+                        if side == "P1"
+                        else "P1"
+                    )
+
+                    cuerpo_rival = (
+                        board.get("enemy_snake")
+                        or board.get(rival_side)
+                        or []
+                    )
+
+                    manzana = (
+                        board.get("apple")
+                        or board.get("food")
+                    )
+
+                    # Renderizar tablero.
                     self.visualizador.renderizar(
                         {
                             "apple": manzana,
@@ -242,7 +397,7 @@ class CodeChallengeWSClient:
                         }
                     )
 
-                    # 4. Cálculo y respuesta del movimiento
+                    # Información enviada al bot.
                     payload_for_bot = {
                         "board": board,
                         "rows": rows,
@@ -251,10 +406,12 @@ class CodeChallengeWSClient:
                         "remaining_moves": remaining_moves,
                         "turn_token": turn_token,
                         "game_id": game_id,
+                        "rules": self.rules,
                     }
 
-                    result = self.bot.process_request( # type: ignore
-                        "calculate_move", payload_for_bot
+                    result = self.bot.process_request(  # type: ignore
+                        "calculate_move",
+                        payload_for_bot,
                     )
 
                     if not result.success:
@@ -264,16 +421,35 @@ class CodeChallengeWSClient:
                         )
 
                     direction = None
-                    if isinstance(result.output, dict):
-                        direction = result.output.get("direction")
 
-                    valid_directions = {"UP", "DOWN", "LEFT", "RIGHT", "up", "down", "left", "right"}
+                    if isinstance(
+                        result.output,
+                        dict,
+                    ):
+                        direction = result.output.get(
+                            "direction"
+                        )
+
+                    valid_directions = {
+                        "UP",
+                        "DOWN",
+                        "LEFT",
+                        "RIGHT",
+                        "up",
+                        "down",
+                        "left",
+                        "right",
+                    }
+
                     if direction not in valid_directions:
                         logger.warning(
-                            "Dirección inválida del bot: %s. Usando 'right' por seguridad.",
+                            "Dirección inválida del bot: %s. "
+                            "Usando 'right' por seguridad.",
                             direction,
                         )
+
                         direction = "right"
+
                     else:
                         direction = direction.lower()
 
@@ -285,28 +461,59 @@ class CodeChallengeWSClient:
 
                     self._log_event(
                         game_id,
-                        {"action": "move", "data": move_payload},
+                        {
+                            "action": "move",
+                            "data": move_payload,
+                        },
                         ">",
                     )
 
-                    # 🚀 Enviar respuesta por WebSocket
-                    await self.send_action(ws, "move", move_payload)
+                    # Enviar movimiento.
+                    await self.send_action(
+                        ws,
+                        "move",
+                        move_payload,
+                    )
 
-                    # ⏱️ 2. Detener reloj tras enviar el paquete por la red
                     t_end = time.perf_counter()
-                    total_e2e_ms = (t_end - t_start) * 1000
-                    logger.info(f"⏱️ Tiempo Total WSS (Pygame + Bot + WS Send): {total_e2e_ms:.2f} ms")
 
-                # Evento: Fin de partida
+                    total_e2e_ms = (
+                        t_end - t_start
+                    ) * 1000
+
+                    logger.info(
+                        "⏱️ Tiempo Total WSS "
+                        "(Pygame + Bot + WS Send): %.2f ms",
+                        total_e2e_ms,
+                    )
+
+                # Evento: fin de partida.
                 elif event == "game_over":
-                    game_id = request_data.get("game_id")
+                    game_id = request_data.get(
+                        "game_id"
+                    )
+
                     if game_id:
-                        self._log_event(game_id, request_data, "<")
-                        self._write_game_log(game_id)
-                    # Reiniciamos el visualizador para la próxima partida
+                        self._log_event(
+                            game_id,
+                            request_data,
+                            "<",
+                        )
+
+                        self._write_game_log(
+                            game_id
+                        )
+
+                    # Preparar visualizador para otra partida.
                     self.visualizador = None
 
             except json.JSONDecodeError:
-                logger.warning("Mensaje no formateado en JSON.")
+                logger.warning(
+                    "Mensaje no formateado en JSON."
+                )
+
             except Exception as e:
-                logger.error(f"Error procesando evento: {e}")
+                logger.error(
+                    "Error procesando evento: %s",
+                    e,
+                )
