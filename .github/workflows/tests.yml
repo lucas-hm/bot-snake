@@ -55,6 +55,6 @@ jobs:
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
         pip install pytest flake8 pytest-cov coverage xenon
 
-    - name: Análisis de complejidad con Xenon
+    - name: Análisis de complejidad con Radon
       run: |
         radon cc -s -a .
