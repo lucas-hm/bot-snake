@@ -1,0 +1,258 @@
+========================================
+BOT DEV_SENTINEL - REPORTE CI
+========================================
+
+TESTS
+----------------------------------------
+============================= test session starts ==============================
+platform linux -- Python 3.12.13, pytest-9.1.1, pluggy-1.6.0
+rootdir: /home/runner/work/bot-snake/bot-snake/bot-snake-main
+plugins: cov-7.1.0
+collected 80 items
+
+BOT/dev_sentinel/tests/test_bot.py ......                                [  7%]
+BOT/dev_sentinel/tests/test_game_engine.py ............................. [ 43%]
+.............                                                            [ 60%]
+BOT/dev_sentinel/tests/test_renderer.py ...............                  [ 78%]
+BOT/dev_sentinel/tests/test_rules.py .................                   [100%]
+
+============================== 80 passed in 0.55s ==============================
+
+COBERTURA
+----------------------------------------
+Name                                         Stmts   Miss  Cover   Missing
+--------------------------------------------------------------------------
+BOT/dev_sentinel/bot.py                         11      0   100%
+BOT/dev_sentinel/game_engine.py                250      7    97%   61, 80, 165, 376, 412, 425, 434
+BOT/dev_sentinel/interfaces.py                   9      0   100%
+BOT/dev_sentinel/renderer.py                    55      0   100%
+BOT/dev_sentinel/rules.py                       29      0   100%
+BOT/dev_sentinel/tests/test_bot.py              41      1    98%   73
+BOT/dev_sentinel/tests/test_game_engine.py     197      1    99%   366
+BOT/dev_sentinel/tests/test_renderer.py        116      1    99%   293
+BOT/dev_sentinel/tests/test_rules.py            41      1    98%   127
+--------------------------------------------------------------------------
+TOTAL                                          749     11    99%
+
+COMPLEJIDAD CICLOMÁTICA
+----------------------------------------
+measure_move_time.py
+    F 57:0 measure_bot_performance - A (5)
+    F 21:0 test_ping - A (4)
+    F 100:0 main - A (1)
+arena_server.py
+    M 141:4 ArenaHandler.do_POST - C (17)
+    F 58:0 choose_enemy_direction - B (10)
+    C 121:0 ArenaHandler - B (8)
+    F 112:0 resolve_head_on_head - A (4)
+    F 39:0 in_bounds - A (2)
+    F 44:0 snake_cells - A (2)
+    F 52:0 closest_food - A (2)
+    F 94:0 move_snake - A (2)
+    F 104:0 is_collision - A (2)
+    M 127:4 ArenaHandler.do_GET - A (2)
+    F 48:0 manhattan - A (1)
+    F 217:0 run - A (1)
+    M 122:4 ArenaHandler._set_headers - A (1)
+BOT/dev_sentinel/main.py
+    F 9:0 build_bot - A (1)
+    F 16:0 build_rules - A (1)
+BOT/dev_sentinel/rules.py
+    M 40:4 GameRules.causes_death - A (3)
+    M 49:4 GameRules.get_score_for_move - A (3)
+    C 3:0 GameRules - A (2)
+    M 12:4 GameRules.__init__ - A (1)
+    M 20:4 GameRules.get_food_score - A (1)
+    M 24:4 GameRules.get_survival_score - A (1)
+    M 28:4 GameRules.get_death_score - A (1)
+    M 32:4 GameRules.get_opponent_win_score - A (1)
+    M 36:4 GameRules.is_food - A (1)
+    M 70:4 GameRules.has_moves_remaining - A (1)
+BOT/dev_sentinel/renderer.py
+    M 94:4 VisualizadorPygame._obtener_serpiente_pequena - A (5)
+    M 113:4 VisualizadorPygame._dibujar_serpiente - A (5)
+    C 6:0 VisualizadorPygame - A (4)
+    M 40:4 VisualizadorPygame.renderizar - A (3)
+    M 75:4 VisualizadorPygame._dibujar_manzana - A (2)
+    M 7:4 VisualizadorPygame.__init__ - A (1)
+    M 143:4 VisualizadorPygame.cerrar - A (1)
+BOT/dev_sentinel/client_runner.py
+    F 8:0 run_match_against_arena - B (10)
+BOT/dev_sentinel/game_engine.py
+    M 156:4 GameMoveTool.execute - F (56)
+    M 112:4 HeadToHeadMCTS._rollout - C (16)
+    C 151:0 GameMoveTool - C (16)
+    M 456:4 GameMoveTool._get_bfs_distance_map - B (7)
+    M 472:4 GameMoveTool._bfs_distance_fast - B (7)
+    M 492:4 GameMoveTool._flood_fill - B (6)
+    C 28:0 HeadToHeadMCTS - A (5)
+    M 39:4 HeadToHeadMCTS._is_terminal - A (4)
+    M 49:4 HeadToHeadMCTS.search - A (4)
+    M 83:4 HeadToHeadMCTS._expand - A (4)
+    M 75:4 HeadToHeadMCTS._select - A (3)
+    C 13:0 MCTSNode - A (2)
+    M 67:4 HeadToHeadMCTS._backpropagate - A (2)
+    M 14:4 MCTSNode.__init__ - A (1)
+    M 24:4 MCTSNode.is_fully_expanded - A (1)
+    M 29:4 HeadToHeadMCTS.__init__ - A (1)
+    M 105:4 HeadToHeadMCTS._best_uct - A (1)
+    M 153:4 GameMoveTool.name - A (1)
+BOT/dev_sentinel/interfaces.py
+    C 11:0 IBotCommand - A (2)
+    C 6:0 CommandResult - A (1)
+    M 14:4 IBotCommand.name - A (1)
+    M 18:4 IBotCommand.execute - A (1)
+BOT/dev_sentinel/ws_client.py
+    M 342:4 CodeChallengeWSClient._render_board - B (8)
+    M 162:4 CodeChallengeWSClient._listen_loop - B (7)
+    M 118:4 CodeChallengeWSClient.start - B (6)
+    M 226:4 CodeChallengeWSClient._handle_turn - A (5)
+    C 21:0 CodeChallengeWSClient - A (4)
+    M 22:4 CodeChallengeWSClient.__init__ - A (3)
+    M 387:4 CodeChallengeWSClient._get_valid_direction - A (3)
+    M 417:4 CodeChallengeWSClient._handle_game_over - A (3)
+    M 53:4 CodeChallengeWSClient._write_game_log - A (2)
+    M 43:4 CodeChallengeWSClient._log_event - A (1)
+    M 74:4 CodeChallengeWSClient.send_action - A (1)
+    M 94:4 CodeChallengeWSClient.join_game - A (1)
+    M 206:4 CodeChallengeWSClient._handle_challenge - A (1)
+BOT/dev_sentinel/bot.py
+    C 3:0 CodeAssistantBot - A (2)
+    M 11:4 CodeAssistantBot.process_request - A (2)
+    M 4:4 CodeAssistantBot.__init__ - A (1)
+    M 8:4 CodeAssistantBot.register_command - A (1)
+BOT/dev_sentinel/juego.py
+    M 30:4 VisualizadorPygame.renderizar - C (16)
+    C 4:0 VisualizadorPygame - B (10)
+    M 5:4 VisualizadorPygame.__init__ - A (1)
+BOT/dev_sentinel/tests/test_rules.py
+    C 8:0 TestGameRules - A (2)
+    M 11:4 TestGameRules.setUp - A (1)
+    M 15:4 TestGameRules.test_initialization - A (1)
+    M 19:4 TestGameRules.test_get_food_score - A (1)
+    M 23:4 TestGameRules.test_get_survival_score - A (1)
+    M 27:4 TestGameRules.test_get_death_score - A (1)
+    M 31:4 TestGameRules.test_get_opponent_win_score - A (1)
+    M 35:4 TestGameRules.test_is_food_returns_true_for_food_symbol - A (1)
+    M 39:4 TestGameRules.test_is_food_returns_false_for_other_symbols - A (1)
+    M 43:4 TestGameRules.test_causes_death_when_hitting_wall - A (1)
+    M 53:4 TestGameRules.test_causes_death_when_hitting_own_body - A (1)
+    M 63:4 TestGameRules.test_causes_death_when_hitting_opponent - A (1)
+    M 73:4 TestGameRules.test_causes_death_returns_false_when_no_collision - A (1)
+    M 83:4 TestGameRules.test_get_score_for_move_when_dying - A (1)
+    M 93:4 TestGameRules.test_get_score_for_surviving_move - A (1)
+    M 103:4 TestGameRules.test_get_score_for_eating_food - A (1)
+    M 113:4 TestGameRules.test_has_moves_remaining - A (1)
+    M 117:4 TestGameRules.test_has_no_moves_remaining - A (1)
+    M 121:4 TestGameRules.test_has_no_moves_remaining_after_limit - A (1)
+BOT/dev_sentinel/tests/test_game_engine.py
+    M 164:4 TestGameMoveTool.data - A (3)
+    C 8:0 TestMCTSNode - A (2)
+    C 19:0 TestHeadToHeadMCTS - A (2)
+    M 23:4 TestHeadToHeadMCTS.test_terminal_out_of_bounds - A (2)
+    C 160:0 TestGameMoveTool - A (2)
+    C 318:0 TestGameMoveToolHelpers - A (2)
+    M 9:4 TestMCTSNode.test_not_fully_expanded - A (1)
+    M 13:4 TestMCTSNode.test_fully_expanded - A (1)
+    M 20:4 TestHeadToHeadMCTS.setUp - A (1)
+    M 28:4 TestHeadToHeadMCTS.test_terminal_obstacle - A (1)
+    M 32:4 TestHeadToHeadMCTS.test_non_terminal - A (1)
+    M 36:4 TestHeadToHeadMCTS.test_search_empty_moves - A (1)
+    M 41:4 TestHeadToHeadMCTS.test_expand - A (1)
+    M 50:4 TestHeadToHeadMCTS.test_expand_skips_tried_move - A (1)
+    M 64:4 TestHeadToHeadMCTS.test_select_expands_node - A (1)
+    M 69:4 TestHeadToHeadMCTS.test_select_terminal_node - A (1)
+    M 73:4 TestHeadToHeadMCTS.test_best_uct - A (1)
+    M 92:4 TestHeadToHeadMCTS.test_rollout_out_of_bounds - A (1)
+    M 96:4 TestHeadToHeadMCTS.test_rollout_obstacle - A (1)
+    M 100:4 TestHeadToHeadMCTS.test_rollout_no_enemy_survives - A (1)
+    M 108:4 TestHeadToHeadMCTS.test_rollout_enemy_moves - A (1)
+    M 116:4 TestHeadToHeadMCTS.test_rollout_enemy_trapped - A (1)
+    M 125:4 TestHeadToHeadMCTS.test_rollout_my_snake_trapped - A (1)
+    M 130:4 TestHeadToHeadMCTS.test_backpropagate - A (1)
+    M 146:4 TestHeadToHeadMCTS.test_search_returns_move - A (1)
+    M 161:4 TestGameMoveTool.setUp - A (1)
+    M 180:4 TestGameMoveTool.test_name - A (1)
+    M 183:4 TestGameMoveTool.test_no_body - A (1)
+    M 189:4 TestGameMoveTool.test_single_body_food - A (1)
+    M 198:4 TestGameMoveTool.test_forbidden_left - A (1)
+    M 204:4 TestGameMoveTool.test_forbidden_right - A (1)
+    M 210:4 TestGameMoveTool.test_forbidden_up - A (1)
+    M 216:4 TestGameMoveTool.test_forbidden_down - A (1)
+    M 222:4 TestGameMoveTool.test_enemy_not_eating - A (1)
+    M 232:4 TestGameMoveTool.test_enemy_eating - A (1)
+    M 242:4 TestGameMoveTool.test_emergency_no_moves - A (1)
+    M 252:4 TestGameMoveTool.test_mcts_combat - A (1)
+    M 264:4 TestGameMoveTool.test_mcts_invalid_move_uses_bfs - A (1)
+    M 273:4 TestGameMoveTool.test_equal_length_avoids_enemy_neighbor - A (1)
+    M 283:4 TestGameMoveTool.test_longer_can_attack - A (1)
+    M 293:4 TestGameMoveTool.test_tail_with_food_is_not_selected - A (1)
+    M 301:4 TestGameMoveTool.test_empty_food_uses_tail - A (1)
+    M 309:4 TestGameMoveTool.test_board_dimensions_override - A (1)
+    M 319:4 TestGameMoveToolHelpers.setUp - A (1)
+    M 322:4 TestGameMoveToolHelpers.test_bfs_distance_map - A (1)
+    M 330:4 TestGameMoveToolHelpers.test_bfs_fast_reachable - A (1)
+    M 336:4 TestGameMoveToolHelpers.test_bfs_fast_unreachable - A (1)
+    M 343:4 TestGameMoveToolHelpers.test_bfs_fast_same_position - A (1)
+    M 349:4 TestGameMoveToolHelpers.test_flood_fill - A (1)
+    M 355:4 TestGameMoveToolHelpers.test_flood_fill_single_cell - A (1)
+BOT/dev_sentinel/tests/test_bot.py
+    C 10:0 TestCodeAssistantBot - A (2)
+    M 12:4 TestCodeAssistantBot.setUp - A (1)
+    M 20:4 TestCodeAssistantBot.test_init_default_name - A (1)
+    M 25:4 TestCodeAssistantBot.test_init_custom_name - A (1)
+    M 29:4 TestCodeAssistantBot.test_register_command - A (1)
+    M 35:4 TestCodeAssistantBot.test_process_request_unregistered_command - A (1)
+    M 42:4 TestCodeAssistantBot.test_process_request_success - A (1)
+    M 56:4 TestCodeAssistantBot.test_process_request_with_kwargs - A (1)
+BOT/dev_sentinel/tests/test_renderer.py
+    C 6:0 TestVisualizadorPygame - A (2)
+    M 9:4 TestVisualizadorPygame.test_init_configura_pygame - A (1)
+    M 29:4 TestVisualizadorPygame.test_init_calcula_tamano_de_celda_y_margenes - A (1)
+    M 45:4 TestVisualizadorPygame.test_renderizar_dibuja_manzana - A (1)
+    M 72:4 TestVisualizadorPygame.test_renderizar_no_dibuja_manzana_si_no_existe - A (1)
+    M 91:4 TestVisualizadorPygame.test_renderizar_dibuja_dev_sentinel - A (1)
+    M 120:4 TestVisualizadorPygame.test_renderizar_dibuja_rival - A (1)
+    M 148:4 TestVisualizadorPygame.test_renderizar_dibuja_ambas_serpientes - A (1)
+    M 177:4 TestVisualizadorPygame.test_serpiente_dev_es_mas_pequena - A (1)
+    M 190:4 TestVisualizadorPygame.test_serpiente_rival_es_mas_pequena - A (1)
+    M 203:4 TestVisualizadorPygame.test_serpientes_misma_longitud - A (1)
+    M 213:4 TestVisualizadorPygame.test_una_serpiente_vacia - A (1)
+    M 223:4 TestVisualizadorPygame.test_ambas_serpientes_vacias - A (1)
+    M 234:4 TestVisualizadorPygame.test_renderizar_maneja_eventos - A (1)
+    M 253:4 TestVisualizadorPygame.test_cerrar_pygame - A (1)
+    M 266:4 TestVisualizadorPygame.test_evento_quit_cierra_pygame - A (1)
+BOT/dev_sentinel/tools/ast_analyzer.py
+    M 9:4 ASTMetricsAnalyzer.execute - B (8)
+    C 4:0 ASTMetricsAnalyzer - B (6)
+    M 6:4 ASTMetricsAnalyzer.name - A (1)
+BOT/dev_sentinel/tools/formatter_tool.py
+    C 5:0 AutoFormatterTool - A (3)
+    M 10:4 AutoFormatterTool.execute - A (2)
+    M 7:4 AutoFormatterTool.name - A (1)
+BOT/dev_sentinel/tools/ai_explainer.py
+    M 10:4 AIExplainerTool.execute - B (8)
+    C 5:0 AIExplainerTool - B (6)
+    M 7:4 AIExplainerTool.name - A (1)
+BOT/dev_sentinel/tools/security_tool.py
+    M 11:4 SecurityGuardTool.execute - B (8)
+    C 6:0 SecurityGuardTool - B (6)
+    M 8:4 SecurityGuardTool.name - A (1)
+BOT/dev_sentinel/tools/refactor_tool.py
+    C 5:0 RefactorTool - A (3)
+    M 10:4 RefactorTool.execute - A (2)
+    M 7:4 RefactorTool.name - A (1)
+
+186 blocks (classes, functions, methods) analyzed.
+Average complexity: A (2.6451612903225805)
+
+LINTER
+----------------------------------------
+0
+
+IMPORTACIÓN DEL ENGINE
+----------------------------------------
+Engine cargado correctamente
+
+SIMULACIÓN DE PARTIDA
+----------------------------------------
