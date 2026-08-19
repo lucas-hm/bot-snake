@@ -5,7 +5,7 @@ BOT DEV_SENTINEL - REPORTE CI
 TESTS
 ----------------------------------------
 ============================= test session starts ==============================
-platform linux -- Python 3.12.14, pytest-9.1.1, pluggy-1.6.0
+platform linux -- Python 3.12.13, pytest-9.1.1, pluggy-1.6.0
 rootdir: /home/runner/work/bot-snake/bot-snake/bot-snake-main
 plugins: cov-7.1.0
 collected 80 items
@@ -16,7 +16,7 @@ BOT/dev_sentinel/tests/test_game_engine.py ............................. [ 43%]
 BOT/dev_sentinel/tests/test_renderer.py ...............                  [ 78%]
 BOT/dev_sentinel/tests/test_rules.py .................                   [100%]
 
-============================== 80 passed in 0.18s ==============================
+============================== 80 passed in 0.25s ==============================
 
 COBERTURA
 ----------------------------------------
