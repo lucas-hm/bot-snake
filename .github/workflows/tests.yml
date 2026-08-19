@@ -117,8 +117,16 @@ jobs:
             cat reports/match.txt
           } > reports/ci-report.txt
 
-      - name: Publicar reportes del CI
-        uses: actions/upload-artifact@v4
-        with:
-          name: dev-sentinel-ci-report
-          path: bot-snake-main/reports/
+      - name: Publicar reporte en el repositorio
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          cp reports/ci-report.txt ./ci-report.txt
+
+          git add ci-report.txt
+
+          git diff --cached --quiet || git commit -m "docs: actualizar reporte CI"
+
+          git push
