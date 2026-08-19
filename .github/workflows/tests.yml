@@ -2,59 +2,123 @@ name: GITHUB CI --> Bot dev_sentinel by Lucas Moran
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: ["main", "master"]
   pull_request:
-    branches: [ "main", "master" ]
+    branches: ["main", "master"]
 
 jobs:
   test-and-lint:
     runs-on: ubuntu-latest
+
     defaults:
       run:
         working-directory: ./bot-snake-main
 
     steps:
-    - name: Checkout del código
-      uses: actions/checkout@v3
+      - name: Checkout del código
+        uses: actions/checkout@v4
 
-    - name: Configurar versiones de Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.12'
-        cache: 'pip'
-        cache-dependency-path: 'bot-snake-main/requirements.txt'
+      - name: Configurar versión de Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: "bot-snake-main/requirements.txt"
 
-    - name: Instalar dependencias del proyecto
-      run: |
-        python -m pip install --upgrade pip
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-        pip install pytest flake8 pytest-cov coverage
+      - name: Instalar dependencias del proyecto
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          fi
+          pip install pytest flake8 pytest-cov coverage radon
 
-    - name: Verificación de sintaxis (Linter)
-      run: |
-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --exclude=.venv
+      - name: Crear carpeta de reportes
+        run: |
+          mkdir -p reports
 
-    - name: Probar importación del Engine
-      run: |
-        PYTHONPATH=./BOT/dev_sentinel python -c "import BOT.dev_sentinel.game_engine; print('Engine cargado correctamente')"
+      - name: Verificación de sintaxis (Linter)
+        run: |
+          flake8 . \
+            --count \
+            --select=E9,F63,F7,F82 \
+            --show-source \
+            --statistics \
+            --exclude=.venv \
+            | tee reports/flake8.txt
 
-    - name: Ejecutar Tests Unitarios (Carpeta tests)
-      run: |
-        PYTHONPATH=. pytest ./BOT/dev_sentinel/tests
-        
-    - name: Simulación de partida con reporte de Cobertura
-      run: |
-        if [ -f "run_local_match_with_bot.py" ]; then
-          PYTHONPATH=. coverage run --source=BOT/dev_sentinel -m pytest ./BOT/dev_sentinel/tests
-          coverage report -m --omit="**/juego.py,**/ws_client.py,**/main.py,**/client_runner.py"
-        fi
-    
-    - name: Instalar dependencias del proyecto
-      run: |
-        python -m pip install --upgrade pip
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-        pip install pytest flake8 pytest-cov coverage xenon
+      - name: Probar importación del Engine
+        run: |
+          PYTHONPATH=./BOT/dev_sentinel \
+          python -c "import BOT.dev_sentinel.game_engine; print('Engine cargado correctamente')" \
+          | tee reports/import.txt
 
-    - name: Análisis de complejidad con Radon
-      run: |
-        radon cc -s -a .
+      - name: Ejecutar Tests Unitarios
+        run: |
+          PYTHONPATH=. \
+          pytest ./BOT/dev_sentinel/tests \
+          | tee reports/tests.txt
+
+      - name: Ejecutar Tests con Cobertura
+        run: |
+          PYTHONPATH=. \
+          coverage run \
+            --source=BOT/dev_sentinel \
+            -m pytest ./BOT/dev_sentinel/tests
+
+          coverage report -m \
+            --omit="**/juego.py,**/ws_client.py,**/main.py,**/client_runner.py" \
+            | tee reports/coverage.txt
+
+      - name: Análisis de complejidad con Radon
+        run: |
+          radon cc -s -a . | tee reports/complexity.txt
+
+      - name: Ejecutar simulación de partida
+        run: |
+          if [ -f "run_local_match_with_bot.py" ]; then
+            PYTHONPATH=. \
+            python run_local_match_with_bot.py \
+            | tee reports/match.txt
+          else
+            echo "run_local_match_with_bot.py no existe; simulación omitida." \
+            | tee reports/match.txt
+          fi
+
+      - name: Generar reporte general
+        run: |
+          {
+            echo "========================================"
+            echo "BOT DEV_SENTINEL - REPORTE CI"
+            echo "========================================"
+            echo
+            echo "TESTS"
+            echo "----------------------------------------"
+            cat reports/tests.txt
+            echo
+            echo "COBERTURA"
+            echo "----------------------------------------"
+            cat reports/coverage.txt
+            echo
+            echo "COMPLEJIDAD CICLOMÁTICA"
+            echo "----------------------------------------"
+            cat reports/complexity.txt
+            echo
+            echo "LINTER"
+            echo "----------------------------------------"
+            cat reports/flake8.txt
+            echo
+            echo "IMPORTACIÓN DEL ENGINE"
+            echo "----------------------------------------"
+            cat reports/import.txt
+            echo
+            echo "SIMULACIÓN DE PARTIDA"
+            echo "----------------------------------------"
+            cat reports/match.txt
+          } > reports/ci-report.txt
+
+      - name: Publicar reportes del CI
+        uses: actions/upload-artifact@v4
+        with:
+          name: dev-sentinel-ci-report
+          path: bot-snake-main/reports/
