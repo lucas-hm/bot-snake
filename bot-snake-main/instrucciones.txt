@@ -4,6 +4,10 @@ ejecuciòn de la aplicación:
     
     nix-shell
     
-    pip install websockets
+    pip install -r requirements.txt
 
-    sudo nice -n -20 python3 main.py
+    python3 -m BOT.dev_sentinel.main
+
+ejecuciòn de la prueba:
+    xenon --max-absolute A --max-modules A --max-average A .
+    xenon --max-absolute C --max-modules B --max-average B .

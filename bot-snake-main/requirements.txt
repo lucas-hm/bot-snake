@@ -3,3 +3,5 @@ pygame
 pytest
 pytest-cov
 coverage
+xenon
+radon
