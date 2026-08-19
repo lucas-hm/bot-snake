@@ -79,9 +79,9 @@ jobs:
 
       - name: Ejecutar simulación de partida
         run: |
-          if [ -f "run_local_match_with_bot.py" ]; then
+          if [ -f "BOT/dev_sentinel/run_local_match_with_bot.py" ]; then
             PYTHONPATH=. \
-            python run_local_match_with_bot.py \
+            python bot-snake-main/BOT/dev_sentinel/run_local_match_with_bot.py \
             | tee reports/match.txt
           else
             echo "run_local_match_with_bot.py no existe; simulación omitida." \
