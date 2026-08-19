@@ -81,7 +81,7 @@ jobs:
         run: |
           if [ -f "BOT/dev_sentinel/run_local_match_with_bot.py" ]; then
             PYTHONPATH=. \
-            python bot-snake-main/BOT/dev_sentinel/run_local_match_with_bot.py \
+            python BOT/dev_sentinel/run_local_match_with_bot.py \
             | tee reports/match.txt
           else
             echo "run_local_match_with_bot.py no existe; simulación omitida." \
