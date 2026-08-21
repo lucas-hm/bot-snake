@@ -5,34 +5,34 @@ BOT DEV_SENTINEL - REPORTE CI
 TESTS
 ----------------------------------------
 ============================= test session starts ==============================
-platform linux -- Python 3.12.13, pytest-9.1.1, pluggy-1.6.0
+platform linux -- Python 3.12.14, pytest-9.1.1, pluggy-1.6.0
 rootdir: /home/runner/work/bot-snake/bot-snake/bot-snake-main
 plugins: cov-7.1.0
-collected 80 items
+collected 103 items
 
-BOT/dev_sentinel/tests/test_bot.py ......                                [  7%]
-BOT/dev_sentinel/tests/test_game_engine.py ............................. [ 43%]
-.............                                                            [ 60%]
-BOT/dev_sentinel/tests/test_renderer.py ...............                  [ 78%]
+BOT/dev_sentinel/tests/test_bot.py ......                                [  5%]
+BOT/dev_sentinel/tests/test_game_engine.py ............................. [ 33%]
+....................................                                     [ 68%]
+BOT/dev_sentinel/tests/test_renderer.py ...............                  [ 83%]
 BOT/dev_sentinel/tests/test_rules.py .................                   [100%]
 
-============================== 80 passed in 0.25s ==============================
+============================= 103 passed in 0.58s ==============================
 
 COBERTURA
 ----------------------------------------
 Name                                         Stmts   Miss  Cover   Missing
 --------------------------------------------------------------------------
 BOT/dev_sentinel/bot.py                         11      0   100%
-BOT/dev_sentinel/game_engine.py                250      7    97%   61, 80, 165, 376, 412, 425, 434
+BOT/dev_sentinel/game_engine.py                326      7    98%   85, 261, 522, 539, 558, 580, 722
 BOT/dev_sentinel/interfaces.py                   9      0   100%
 BOT/dev_sentinel/renderer.py                    55      0   100%
 BOT/dev_sentinel/rules.py                       29      0   100%
 BOT/dev_sentinel/tests/test_bot.py              41      1    98%   73
-BOT/dev_sentinel/tests/test_game_engine.py     197      1    99%   366
+BOT/dev_sentinel/tests/test_game_engine.py     312      1    99%   658
 BOT/dev_sentinel/tests/test_renderer.py        116      1    99%   293
 BOT/dev_sentinel/tests/test_rules.py            41      1    98%   127
 --------------------------------------------------------------------------
-TOTAL                                          749     11    99%
+TOTAL                                          940     11    99%
 
 COMPLEJIDAD CICLOMÁTICA
 ----------------------------------------
@@ -79,24 +79,29 @@ BOT/dev_sentinel/renderer.py
 BOT/dev_sentinel/client_runner.py
     F 8:0 run_match_against_arena - B (10)
 BOT/dev_sentinel/game_engine.py
-    M 156:4 GameMoveTool.execute - F (56)
-    M 112:4 HeadToHeadMCTS._rollout - C (16)
-    C 151:0 GameMoveTool - C (16)
-    M 456:4 GameMoveTool._get_bfs_distance_map - B (7)
-    M 472:4 GameMoveTool._bfs_distance_fast - B (7)
-    M 492:4 GameMoveTool._flood_fill - B (6)
+    M 252:4 GameMoveTool.execute - F (63)
+    M 136:4 HeadToHeadMCTS._rollout - C (16)
+    C 234:0 GameMoveTool - C (13)
+    M 679:4 GameMoveTool._update_enemy_profile - B (9)
+    M 602:4 GameMoveTool._get_bfs_distance_map - B (7)
+    M 618:4 GameMoveTool._bfs_distance_fast - B (7)
+    M 638:4 GameMoveTool._flood_fill - B (6)
     C 28:0 HeadToHeadMCTS - A (5)
-    M 39:4 HeadToHeadMCTS._is_terminal - A (4)
-    M 49:4 HeadToHeadMCTS.search - A (4)
-    M 83:4 HeadToHeadMCTS._expand - A (4)
-    M 75:4 HeadToHeadMCTS._select - A (3)
+    M 656:4 GameMoveTool._count_enemy_exits - A (5)
+    M 63:4 HeadToHeadMCTS._is_terminal - A (4)
+    M 73:4 HeadToHeadMCTS.search - A (4)
+    M 107:4 HeadToHeadMCTS._expand - A (4)
+    M 99:4 HeadToHeadMCTS._select - A (3)
+    M 173:4 HeadToHeadMCTS._pick_enemy_rollout_move - A (3)
+    M 192:4 HeadToHeadMCTS._pick_my_rollout_move - A (3)
     C 13:0 MCTSNode - A (2)
-    M 67:4 HeadToHeadMCTS._backpropagate - A (2)
+    M 91:4 HeadToHeadMCTS._backpropagate - A (2)
     M 14:4 MCTSNode.__init__ - A (1)
     M 24:4 MCTSNode.is_fully_expanded - A (1)
-    M 29:4 HeadToHeadMCTS.__init__ - A (1)
-    M 105:4 HeadToHeadMCTS._best_uct - A (1)
-    M 153:4 GameMoveTool.name - A (1)
+    M 44:4 HeadToHeadMCTS.__init__ - A (1)
+    M 129:4 HeadToHeadMCTS._best_uct - A (1)
+    M 235:4 GameMoveTool.__init__ - A (1)
+    M 249:4 GameMoveTool.name - A (1)
 BOT/dev_sentinel/interfaces.py
     C 11:0 IBotCommand - A (2)
     C 6:0 CommandResult - A (1)
@@ -146,56 +151,93 @@ BOT/dev_sentinel/tests/test_rules.py
     M 117:4 TestGameRules.test_has_no_moves_remaining - A (1)
     M 121:4 TestGameRules.test_has_no_moves_remaining_after_limit - A (1)
 BOT/dev_sentinel/tests/test_game_engine.py
-    M 164:4 TestGameMoveTool.data - A (3)
-    C 8:0 TestMCTSNode - A (2)
-    C 19:0 TestHeadToHeadMCTS - A (2)
-    M 23:4 TestHeadToHeadMCTS.test_terminal_out_of_bounds - A (2)
-    C 160:0 TestGameMoveTool - A (2)
-    C 318:0 TestGameMoveToolHelpers - A (2)
-    M 9:4 TestMCTSNode.test_not_fully_expanded - A (1)
-    M 13:4 TestMCTSNode.test_fully_expanded - A (1)
-    M 20:4 TestHeadToHeadMCTS.setUp - A (1)
-    M 28:4 TestHeadToHeadMCTS.test_terminal_obstacle - A (1)
-    M 32:4 TestHeadToHeadMCTS.test_non_terminal - A (1)
-    M 36:4 TestHeadToHeadMCTS.test_search_empty_moves - A (1)
-    M 41:4 TestHeadToHeadMCTS.test_expand - A (1)
-    M 50:4 TestHeadToHeadMCTS.test_expand_skips_tried_move - A (1)
-    M 64:4 TestHeadToHeadMCTS.test_select_expands_node - A (1)
-    M 69:4 TestHeadToHeadMCTS.test_select_terminal_node - A (1)
-    M 73:4 TestHeadToHeadMCTS.test_best_uct - A (1)
-    M 92:4 TestHeadToHeadMCTS.test_rollout_out_of_bounds - A (1)
-    M 96:4 TestHeadToHeadMCTS.test_rollout_obstacle - A (1)
-    M 100:4 TestHeadToHeadMCTS.test_rollout_no_enemy_survives - A (1)
-    M 108:4 TestHeadToHeadMCTS.test_rollout_enemy_moves - A (1)
-    M 116:4 TestHeadToHeadMCTS.test_rollout_enemy_trapped - A (1)
-    M 125:4 TestHeadToHeadMCTS.test_rollout_my_snake_trapped - A (1)
-    M 130:4 TestHeadToHeadMCTS.test_backpropagate - A (1)
-    M 146:4 TestHeadToHeadMCTS.test_search_returns_move - A (1)
-    M 161:4 TestGameMoveTool.setUp - A (1)
-    M 180:4 TestGameMoveTool.test_name - A (1)
-    M 183:4 TestGameMoveTool.test_no_body - A (1)
-    M 189:4 TestGameMoveTool.test_single_body_food - A (1)
-    M 198:4 TestGameMoveTool.test_forbidden_left - A (1)
-    M 204:4 TestGameMoveTool.test_forbidden_right - A (1)
-    M 210:4 TestGameMoveTool.test_forbidden_up - A (1)
-    M 216:4 TestGameMoveTool.test_forbidden_down - A (1)
-    M 222:4 TestGameMoveTool.test_enemy_not_eating - A (1)
-    M 232:4 TestGameMoveTool.test_enemy_eating - A (1)
-    M 242:4 TestGameMoveTool.test_emergency_no_moves - A (1)
-    M 252:4 TestGameMoveTool.test_mcts_combat - A (1)
-    M 264:4 TestGameMoveTool.test_mcts_invalid_move_uses_bfs - A (1)
-    M 273:4 TestGameMoveTool.test_equal_length_avoids_enemy_neighbor - A (1)
-    M 283:4 TestGameMoveTool.test_longer_can_attack - A (1)
-    M 293:4 TestGameMoveTool.test_tail_with_food_is_not_selected - A (1)
-    M 301:4 TestGameMoveTool.test_empty_food_uses_tail - A (1)
-    M 309:4 TestGameMoveTool.test_board_dimensions_override - A (1)
-    M 319:4 TestGameMoveToolHelpers.setUp - A (1)
-    M 322:4 TestGameMoveToolHelpers.test_bfs_distance_map - A (1)
-    M 330:4 TestGameMoveToolHelpers.test_bfs_fast_reachable - A (1)
-    M 336:4 TestGameMoveToolHelpers.test_bfs_fast_unreachable - A (1)
-    M 343:4 TestGameMoveToolHelpers.test_bfs_fast_same_position - A (1)
-    M 349:4 TestGameMoveToolHelpers.test_flood_fill - A (1)
-    M 355:4 TestGameMoveToolHelpers.test_flood_fill_single_cell - A (1)
+    M 162:4 TestGameMoveTool.data - A (3)
+    C 515:0 TestSkipMCTSTrivialEnemy - A (3)
+    M 521:4 TestSkipMCTSTrivialEnemy.data - A (3)
+    M 557:4 TestAggressiveForaging.data - A (3)
+    C 6:0 TestMCTSNode - A (2)
+    C 17:0 TestHeadToHeadMCTS - A (2)
+    M 21:4 TestHeadToHeadMCTS.test_terminal_out_of_bounds - A (2)
+    C 158:0 TestGameMoveTool - A (2)
+    C 316:0 TestGameMoveToolHelpers - A (2)
+    C 366:0 TestRolloutSemiGreedy - A (2)
+    C 430:0 TestEnemyProfileRollout - A (2)
+    C 481:0 TestCountEnemyExits - A (2)
+    C 551:0 TestAggressiveForaging - A (2)
+    C 601:0 TestEnemyProfileInference - A (2)
+    M 610:4 TestEnemyProfileInference.test_perfil_sigue_unknown_con_pocas_muestras - A (2)
+    M 616:4 TestEnemyProfileInference.test_perfil_aggressive_cuando_se_acerca - A (2)
+    M 624:4 TestEnemyProfileInference.test_perfil_passive_cuando_no_se_acerca - A (2)
+    M 640:4 TestEnemyProfileInference.test_historial_se_acota_a_20 - A (2)
+    C 646:0 TestGameMoveToolInit - A (2)
+    M 7:4 TestMCTSNode.test_not_fully_expanded - A (1)
+    M 11:4 TestMCTSNode.test_fully_expanded - A (1)
+    M 18:4 TestHeadToHeadMCTS.setUp - A (1)
+    M 26:4 TestHeadToHeadMCTS.test_terminal_obstacle - A (1)
+    M 30:4 TestHeadToHeadMCTS.test_non_terminal - A (1)
+    M 34:4 TestHeadToHeadMCTS.test_search_empty_moves - A (1)
+    M 39:4 TestHeadToHeadMCTS.test_expand - A (1)
+    M 48:4 TestHeadToHeadMCTS.test_expand_skips_tried_move - A (1)
+    M 62:4 TestHeadToHeadMCTS.test_select_expands_node - A (1)
+    M 67:4 TestHeadToHeadMCTS.test_select_terminal_node - A (1)
+    M 71:4 TestHeadToHeadMCTS.test_best_uct - A (1)
+    M 90:4 TestHeadToHeadMCTS.test_rollout_out_of_bounds - A (1)
+    M 94:4 TestHeadToHeadMCTS.test_rollout_obstacle - A (1)
+    M 98:4 TestHeadToHeadMCTS.test_rollout_no_enemy_survives - A (1)
+    M 106:4 TestHeadToHeadMCTS.test_rollout_enemy_moves - A (1)
+    M 114:4 TestHeadToHeadMCTS.test_rollout_enemy_trapped - A (1)
+    M 123:4 TestHeadToHeadMCTS.test_rollout_my_snake_trapped - A (1)
+    M 128:4 TestHeadToHeadMCTS.test_backpropagate - A (1)
+    M 144:4 TestHeadToHeadMCTS.test_search_returns_move - A (1)
+    M 159:4 TestGameMoveTool.setUp - A (1)
+    M 178:4 TestGameMoveTool.test_name - A (1)
+    M 181:4 TestGameMoveTool.test_no_body - A (1)
+    M 187:4 TestGameMoveTool.test_single_body_food - A (1)
+    M 196:4 TestGameMoveTool.test_forbidden_left - A (1)
+    M 202:4 TestGameMoveTool.test_forbidden_right - A (1)
+    M 208:4 TestGameMoveTool.test_forbidden_up - A (1)
+    M 214:4 TestGameMoveTool.test_forbidden_down - A (1)
+    M 220:4 TestGameMoveTool.test_enemy_not_eating - A (1)
+    M 230:4 TestGameMoveTool.test_enemy_eating - A (1)
+    M 240:4 TestGameMoveTool.test_emergency_no_moves - A (1)
+    M 250:4 TestGameMoveTool.test_mcts_combat - A (1)
+    M 262:4 TestGameMoveTool.test_mcts_invalid_move_uses_bfs - A (1)
+    M 271:4 TestGameMoveTool.test_equal_length_avoids_enemy_neighbor - A (1)
+    M 281:4 TestGameMoveTool.test_longer_can_attack - A (1)
+    M 291:4 TestGameMoveTool.test_tail_with_food_is_not_selected - A (1)
+    M 299:4 TestGameMoveTool.test_empty_food_uses_tail - A (1)
+    M 307:4 TestGameMoveTool.test_board_dimensions_override - A (1)
+    M 317:4 TestGameMoveToolHelpers.setUp - A (1)
+    M 320:4 TestGameMoveToolHelpers.test_bfs_distance_map - A (1)
+    M 328:4 TestGameMoveToolHelpers.test_bfs_fast_reachable - A (1)
+    M 334:4 TestGameMoveToolHelpers.test_bfs_fast_unreachable - A (1)
+    M 341:4 TestGameMoveToolHelpers.test_bfs_fast_same_position - A (1)
+    M 347:4 TestGameMoveToolHelpers.test_flood_fill - A (1)
+    M 353:4 TestGameMoveToolHelpers.test_flood_fill_single_cell - A (1)
+    M 369:4 TestRolloutSemiGreedy.setUp - A (1)
+    M 373:4 TestRolloutSemiGreedy.test_pick_my_rollout_greedy_elige_mas_espacio - A (1)
+    M 388:4 TestRolloutSemiGreedy.test_pick_my_rollout_random_cuando_bias_cero - A (1)
+    M 401:4 TestRolloutSemiGreedy.test_pick_my_rollout_random_falla_a_greedy - A (1)
+    M 417:4 TestRolloutSemiGreedy.test_rollout_greedy_sobrevive - A (1)
+    M 433:4 TestEnemyProfileRollout.test_aggressive_elige_mas_cercano_a_mi - A (1)
+    M 442:4 TestEnemyProfileRollout.test_non_aggressive_usa_random - A (1)
+    M 454:4 TestEnemyProfileRollout.test_aggressive_sin_opciones_random - A (1)
+    M 466:4 TestEnemyProfileRollout.test_rollout_aggressive_sobrevive - A (1)
+    M 484:4 TestCountEnemyExits.setUp - A (1)
+    M 487:4 TestCountEnemyExits.test_cuatro_salidas_centro - A (1)
+    M 493:4 TestCountEnemyExits.test_dos_salidas_esquina - A (1)
+    M 500:4 TestCountEnemyExits.test_cero_salidas_acorralado - A (1)
+    M 507:4 TestCountEnemyExits.test_una_salida - A (1)
+    M 518:4 TestSkipMCTSTrivialEnemy.setUp - A (1)
+    M 537:4 TestSkipMCTSTrivialEnemy.test_mcts_no_se_usa_con_enemigo_acorralado - A (1)
+    M 554:4 TestAggressiveForaging.setUp - A (1)
+    M 573:4 TestAggressiveForaging.test_foraging_activo_cuando_enemigo_lejos - A (1)
+    M 589:4 TestAggressiveForaging.test_foraging_inactivo_cuando_enemigo_cerca - A (1)
+    M 604:4 TestEnemyProfileInference.setUp - A (1)
+    M 607:4 TestEnemyProfileInference.test_perfil_inicia_unknown - A (1)
+    M 631:4 TestEnemyProfileInference.test_perfil_ignora_enemy_head_none - A (1)
+    M 636:4 TestEnemyProfileInference.test_perfil_ignora_my_head_none - A (1)
+    M 649:4 TestGameMoveToolInit.test_init_crea_estado_perfil - A (1)
 BOT/dev_sentinel/tests/test_bot.py
     C 10:0 TestCodeAssistantBot - A (2)
     M 12:4 TestCodeAssistantBot.setUp - A (1)
@@ -243,8 +285,8 @@ BOT/dev_sentinel/tools/refactor_tool.py
     M 10:4 RefactorTool.execute - A (2)
     M 7:4 RefactorTool.name - A (1)
 
-186 blocks (classes, functions, methods) analyzed.
-Average complexity: A (2.6451612903225805)
+228 blocks (classes, functions, methods) analyzed.
+Average complexity: A (2.5)
 
 LINTER
 ----------------------------------------
