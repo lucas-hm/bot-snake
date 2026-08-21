@@ -26,10 +26,34 @@ class MCTSNode:
 
 
 class HeadToHeadMCTS():
-    def __init__(self, width: int, height: int, iterations: int = 80):
+    """MCTS para combate head-to-head.
+
+    Args:
+        width, height: dimensiones del tablero.
+        iterations: cantidad de simulaciones MCTS.
+        greedy_bias: probabilidad [0,1] de elegir el movimiento con mas
+            espacio libre (flood fill) durante el rollout en lugar de uno
+            aleatorio. 0.0 = rollout random puro (comportamiento original),
+            0.7 = rollout semi-greedy (recomendado).
+        enemy_profile: modelo del rival para el rollout.
+            - "random": el enemigo se mueve aleatoriamente (default, original).
+            - "aggressive": el enemigo prioriza acercarse a nuestra cabeza.
+            - "passive": el enemigo prioriza acercarse a la comida.
+    """
+
+    def __init__(
+        self,
+        width: int,
+        height: int,
+        iterations: int = 80,
+        greedy_bias: float = 0.7,
+        enemy_profile: str = "random",
+    ):
         self.width = width
         self.height = height
         self.iterations = iterations
+        self.greedy_bias = greedy_bias
+        self.enemy_profile = enemy_profile
         self.dirs = {
             "UP": (0, -1),
             "DOWN": (0, 1),
@@ -127,9 +151,11 @@ class HeadToHeadMCTS():
                     if 0 <= nxt_e[0] < self.width and 0 <= nxt_e[1] < self.height and nxt_e not in curr_obs:
                         enemy_valid.append(nxt_e)
                 if enemy_valid:
-                    curr_enemy = random.choice(enemy_valid)
+                    curr_enemy = self._pick_enemy_rollout_move(
+                        curr_enemy, curr_my, enemy_valid
+                    )
 
- # Mover a mi serpiente de forma aleatoria
+ # Mover a mi serpiente: semi-greedy por espacio (greedy_bias)
             my_valid = []
             for dx, dy in self.dirs.values():
                 nxt_m = (curr_my[0] + dx, curr_my[1] + dy)
@@ -140,15 +166,85 @@ class HeadToHeadMCTS():
                 return -1.0   # Quedé atrapado
 
             curr_obs.add(curr_my)
-            curr_my = random.choice(my_valid)
+            curr_my = self._pick_my_rollout_move(curr_my, my_valid, curr_obs)
 
         return 1.0   # Supervivencia exitosa
+
+    def _pick_enemy_rollout_move(
+        self,
+        enemy_head: Tuple[int, int],
+        my_head: Tuple[int, int],
+        enemy_valid: list,
+    ) -> Tuple[int, int]:
+        """Elige el movimiento del rival en el rollout segun su perfil.
+
+        - 'aggressive': minimiza distancia Manhattan a mi cabeza.
+        - 'passive' o cualquier otro: random (comportamiento original).
+        """
+        if self.enemy_profile != "aggressive" or not enemy_valid:
+            return random.choice(enemy_valid)
+
+        return min(
+            enemy_valid,
+            key=lambda pos: abs(pos[0] - my_head[0]) + abs(pos[1] - my_head[1]),
+        )
+
+    def _pick_my_rollout_move(
+        self,
+        curr_my: Tuple[int, int],
+        my_valid: list,
+        curr_obs: set,
+    ) -> Tuple[int, int]:
+        """Elige mi movimiento en el rollout.
+
+        Con probabilidad greedy_bias elige el movimiento que mas flood fill
+        (espacio libre) deja; el resto del tiempo es random.
+        greedy_bias = 0.0 reproduce el comportamiento original (random puro).
+        """
+        if self.greedy_bias <= 0.0 or random.random() >= self.greedy_bias:
+            return random.choice(my_valid)
+
+        def quick_space(pos: Tuple[int, int]) -> int:
+            """Flood fill ligero (capado a 30 celdas) para rankear."""
+            seen = {pos}
+            queue = deque([pos])
+            count = 0
+            while queue and count < 30:
+                x, y = queue.popleft()
+                count += 1
+                for nx, ny in (
+                    (x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)
+                ):
+                    if (
+                        0 <= nx < self.width
+                        and 0 <= ny < self.height
+                        and (nx, ny) not in seen
+                        and (nx, ny) not in curr_obs
+                    ):
+                        seen.add((nx, ny))
+                        queue.append((nx, ny))
+            return count
+
+        return max(my_valid, key=quick_space)
 
 
 # =============================================================================
  # COMANDO PRINCIPAL CON INTEGRACIÓN DE MCTS Y BFS
 # =============================================================================
 class GameMoveTool(IBotCommand):
+    def __init__(self):
+        # Perfil del rival inferido a lo largo de la partida.
+        #   "aggressive": persigue nuestra cabeza.
+        #   "passive":    no se acerca (defensivo / cosechador).
+        #   "unknown":    todavia no hay suficiente informacion.
+        self._enemy_profile: str = "unknown"
+        # Historial de posiciones de la cabeza enemiga para inferir perfil.
+        self._enemy_head_history: list = []
+        # Historial de nuestras posiciones de cabeza.
+        self._my_head_history: list = []
+        # Minimo de muestras antes de clasificar al rival.
+        self._profile_min_samples = 4
+
     @property
     def name(self) -> str:
         return "calculate_move"
@@ -192,6 +288,11 @@ class GameMoveTool(IBotCommand):
         my_head = tuple(my_body_list[0])
         my_tail = tuple(my_body_list[-1]) if my_body_list else None
         enemy_head = tuple(enemy_body_list[0]) if enemy_body_list else None
+
+        # --- Inferencia del perfil del rival (cambio 4) ---
+        # Alimentamos el historial y, cuando hay muestras suficientes,
+        # clasificamos al enemigo como agresivo o pasivo.
+        self._update_enemy_profile(my_head, enemy_head)
 
         my_obstacles = (
             set(tuple(p) for p in my_body_list[:-1])
@@ -283,9 +384,22 @@ class GameMoveTool(IBotCommand):
 
         if enemy_head:
             dist_to_enemy = abs(my_head[0] - enemy_head[0]) + abs(my_head[1] - enemy_head[1])
- # Si el enemigo está a 3 pasos o menos, MCTS toma el control táctico
-            if dist_to_enemy <= 3:
-                mcts_engine = HeadToHeadMCTS(width=grid_width, height=grid_height, iterations=80)
+ # Si el enemigo está a 3 pasos o menos, MCTS toma el control táctico.
+ # PERO: si el rival está acorralado (<=2 salidas) o es trivial, dejamos
+ # que el BFS lo acorralen en lugar de gastar iteraciones de MCTS (cambio 2).
+            enemy_exits = self._count_enemy_exits(
+                enemy_head, obstacles, grid_width, grid_height
+            )
+            skip_mcts = enemy_exits <= 2
+
+            if dist_to_enemy <= 3 and not skip_mcts:
+                mcts_engine = HeadToHeadMCTS(
+                    width=grid_width,
+                    height=grid_height,
+                    iterations=80,
+                    greedy_bias=0.7,
+                    enemy_profile=self._enemy_profile,
+                )
                 mcts_move = mcts_engine.search(
                     my_head=my_head,
                     enemy_head=enemy_head,
@@ -294,6 +408,11 @@ class GameMoveTool(IBotCommand):
                 )
                 if mcts_move and mcts_move in valid_moves:
                     mcts_strategy_used = True
+
+            elif dist_to_enemy <= 3 and skip_mcts:
+                # Rival trivial/acorralado: registramos en metadata que
+                # se evito MCTS a proposito.
+                pass
 
         if mcts_strategy_used and mcts_move:
             best_move = mcts_move
@@ -330,12 +449,39 @@ class GameMoveTool(IBotCommand):
         closest_food = None
         min_food_dist = float("inf")
 
+        # --- Cosechador agresivo (cambio 1) ---
+        # Si el enemigo esta lejos (>6 casillas Manhattan) y no amenaza,
+        # elegimos la comida mas cercana a la cabeza enemiga que nosotros
+        # podamos alcanzar antes (interceptacion de recursos). Esto asfixia
+        # al rival debil economicamente sin arriesgarnos.
+        aggressive_foraging = False
+        dist_to_enemy_food = float("inf")
+        if enemy_head and food_positions:
+            dist_to_enemy_food = abs(my_head[0] - enemy_head[0]) + abs(my_head[1] - enemy_head[1])
+            aggressive_foraging = dist_to_enemy_food > 6
+
         for food in food_positions:
-            distance = dist_map.get(
-                food,
-                abs(food[0] - my_head[0])
-                + abs(food[1] - my_head[1]),
-            )
+            if aggressive_foraging:
+                # Priorizar comida cerca del enemigo (para robarla).
+                distance = abs(food[0] - enemy_head[0]) + abs(food[1] - enemy_head[1])
+                # Solo consideramos comida a la que nosotros llegamos antes
+                # o al mismo tiempo que el rival (BFS desde nuestra cabeza).
+                my_reach = dist_map.get(
+                    food,
+                    abs(food[0] - my_head[0]) + abs(food[1] - my_head[1]),
+                )
+                enemy_reach = abs(food[0] - enemy_head[0]) + abs(food[1] - enemy_head[1])
+                if my_reach > enemy_reach:
+                    # No podemos ganarle la comida: la descartamos para robar.
+                    continue
+                # Para ordenar, usamos cercania al enemigo (menor = mejor para robar).
+                distance = -distance  # negativo: prioriza mas cercana al enemigo
+            else:
+                distance = dist_map.get(
+                    food,
+                    abs(food[0] - my_head[0])
+                    + abs(food[1] - my_head[1]),
+                )
 
             if distance < min_food_dist:
                 min_food_dist = distance
@@ -506,3 +652,77 @@ class GameMoveTool(IBotCommand):
                     queue.append((nx, ny))
 
         return space_count
+
+    def _count_enemy_exits(
+        self,
+        enemy_head: tuple,
+        obstacles: set,
+        width: int,
+        height: int,
+    ) -> int:
+        """Cuenta cuantas casillas libres adyacentes tiene la cabeza enemiga.
+
+        Un enemigo con <=2 salidas esta acorralado (esquina / tunel) y se
+        considera trivial: no hace falta gastar MCTS para vencerlo.
+        """
+        exits = 0
+        x, y = enemy_head
+        for nx, ny in [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]:
+            if (
+                0 <= nx < width
+                and 0 <= ny < height
+                and (nx, ny) not in obstacles
+            ):
+                exits += 1
+        return exits
+
+    def _update_enemy_profile(
+        self,
+        my_head: tuple,
+        enemy_head: Optional[tuple],
+    ) -> None:
+        """Actualiza el historial de posiciones e infiere el perfil del rival.
+
+        Registra las posiciones de ambas cabezas y, cuando hay muestras
+        suficientes, decide si el rival es 'aggressive' (tiende a acercarse
+        a nuestra cabeza) o 'passive' (no se acerca).
+
+        Solo clasifica entre 'aggressive' y 'passive'; 'unknown' se usa
+        mientras no hay datos suficientes.
+        """
+        if my_head is None or enemy_head is None:
+            return
+
+        self._my_head_history.append(my_head)
+        self._enemy_head_history.append(enemy_head)
+
+        # Mantener un historial acotado (ultimas 20 muestras).
+        if len(self._my_head_history) > 20:
+            self._my_head_history = self._my_head_history[-20:]
+            self._enemy_head_history = self._enemy_head_history[-20:]
+
+        if len(self._enemy_head_history) < self._profile_min_samples:
+            return
+
+        # Contar en cuantos turnos el enemigo redujo su distancia a nosotros.
+        closing = 0
+        total = 0
+        for i in range(1, len(self._enemy_head_history)):
+            prev_e = self._enemy_head_history[i - 1]
+            curr_e = self._enemy_head_history[i]
+            prev_m = self._my_head_history[i - 1]
+            # Distancia Manhattan antes y despues.
+            prev_dist = abs(prev_e[0] - prev_m[0]) + abs(prev_e[1] - prev_m[1])
+            curr_dist = abs(curr_e[0] - prev_m[0]) + abs(curr_e[1] - prev_m[1])
+            if curr_dist < prev_dist:
+                closing += 1
+            total += 1
+
+        if total == 0:
+            return
+
+        closing_ratio = closing / total
+        if closing_ratio >= 0.6:
+            self._enemy_profile = "aggressive"
+        else:
+            self._enemy_profile = "passive"

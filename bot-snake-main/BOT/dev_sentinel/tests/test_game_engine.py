@@ -1,9 +1,7 @@
-
 import unittest
 from unittest.mock import patch
 
 from BOT.dev_sentinel.game_engine import GameMoveTool, HeadToHeadMCTS, MCTSNode
-
 
 class TestMCTSNode(unittest.TestCase):
     def test_not_fully_expanded(self):
@@ -360,6 +358,300 @@ class TestGameMoveToolHelpers(unittest.TestCase):
             3,
         )
         self.assertEqual(result, 1)
+
+
+# =============================================================================
+# Tests para las mejoras cirujanas (cambios 1-4)
+# =============================================================================
+class TestRolloutSemiGreedy(unittest.TestCase):
+    """Cambio 3: el rollout semi-greedy prioriza espacio cuando greedy_bias > 0."""
+
+    def setUp(self):
+        self.mcts_greedy = HeadToHeadMCTS(10, 10, iterations=3, greedy_bias=0.7)
+        self.mcts_random = HeadToHeadMCTS(10, 10, iterations=3, greedy_bias=0.0)
+
+    def test_pick_my_rollout_greedy_elige_mas_espacio(self):
+        # Desde (5,5) el movimiento UP (5,4) abre mas espacio que RIGHT (6,5)
+        # porque (6,5),(7,5)... estan bloqueados por obstaculos a la derecha.
+        obstacles = {(6, 5), (7, 5), (8, 5), (9, 5)}
+        my_valid = [(5, 4), (6, 5)]
+        # Forzamos greedy: random.random() < 0.7 siempre (mock).
+        with patch(
+            "BOT.dev_sentinel.game_engine.random.random",
+            return_value=0.0,
+        ):
+            chosen = self.mcts_greedy._pick_my_rollout_move(
+                (5, 5), my_valid, obstacles
+            )
+        self.assertEqual(chosen, (5, 4))
+
+    def test_pick_my_rollout_random_cuando_bias_cero(self):
+        # Con greedy_bias=0.0 siempre cae al random.choice.
+        my_valid = [(5, 4), (6, 5)]
+        with patch(
+            "BOT.dev_sentinel.game_engine.random.choice",
+            return_value=(6, 5),
+        ) as mock_choice:
+            chosen = self.mcts_random._pick_my_rollout_move(
+                (5, 5), my_valid, set()
+            )
+        mock_choice.assert_called_once_with(my_valid)
+        self.assertEqual(chosen, (6, 5))
+
+    def test_pick_my_rollout_random_falla_a_greedy(self):
+        # greedy_bias alto pero random.random() >= bias -> cae a random.
+        my_valid = [(5, 4), (6, 5)]
+        with patch(
+            "BOT.dev_sentinel.game_engine.random.random",
+            return_value=0.9,  # >= 0.7, no greedy
+        ), patch(
+            "BOT.dev_sentinel.game_engine.random.choice",
+            return_value=(6, 5),
+        ) as mock_choice:
+            chosen = self.mcts_greedy._pick_my_rollout_move(
+                (5, 5), my_valid, set()
+            )
+        mock_choice.assert_called_once()
+        self.assertEqual(chosen, (6, 5))
+
+    def test_rollout_greedy_sobrevive(self):
+        # El rollout semi-greedy en un tablero abierto debe sobrevivir.
+        node = MCTSNode((5, 5), None, set())
+        with patch(
+            "BOT.dev_sentinel.game_engine.random.random",
+            return_value=0.0,  # siempre greedy
+        ), patch(
+            "BOT.dev_sentinel.game_engine.random.choice",
+            side_effect=lambda values: values[0],
+        ):
+            self.assertEqual(self.mcts_greedy._rollout(node), 1.0)
+
+
+class TestEnemyProfileRollout(unittest.TestCase):
+    """Cambio 4: el movimiento del rival en el rollout depende de su perfil."""
+
+    def test_aggressive_elige_mas_cercano_a_mi(self):
+        mcts = HeadToHeadMCTS(10, 10, iterations=3, enemy_profile="aggressive")
+        # Enemigo en (1,1), mi cabeza en (5,5). Movimientos validos del
+        # enemigo: (2,1) y (0,1). (2,1) esta mas cerca de (5,5).
+        chosen = mcts._pick_enemy_rollout_move(
+            (1, 1), (5, 5), [(2, 1), (0, 1)]
+        )
+        self.assertEqual(chosen, (2, 1))
+
+    def test_non_aggressive_usa_random(self):
+        mcts = HeadToHeadMCTS(10, 10, iterations=3, enemy_profile="random")
+        with patch(
+            "BOT.dev_sentinel.game_engine.random.choice",
+            return_value=(0, 1),
+        ) as mock_choice:
+            chosen = mcts._pick_enemy_rollout_move(
+                (1, 1), (5, 5), [(2, 1), (0, 1)]
+            )
+        mock_choice.assert_called_once()
+        self.assertEqual(chosen, (0, 1))
+
+    def test_aggressive_sin_opciones_random(self):
+        mcts = HeadToHeadMCTS(10, 10, iterations=3, enemy_profile="aggressive")
+        with patch(
+            "BOT.dev_sentinel.game_engine.random.choice",
+            return_value=(2, 1),
+        ) as mock_choice:
+            chosen = mcts._pick_enemy_rollout_move(
+                (1, 1), (5, 5), []
+            )
+        mock_choice.assert_called_once_with([])
+        self.assertEqual(chosen, (2, 1))
+
+    def test_rollout_aggressive_sobrevive(self):
+        mcts = HeadToHeadMCTS(
+            10, 10, iterations=3, greedy_bias=0.0, enemy_profile="aggressive"
+        )
+        node = MCTSNode((5, 5), (7, 7), set())
+        with patch(
+            "BOT.dev_sentinel.game_engine.random.random",
+            return_value=1.0,  # no greedy en mi movimiento
+        ), patch(
+            "BOT.dev_sentinel.game_engine.random.choice",
+            side_effect=lambda values: values[0],
+        ):
+            self.assertEqual(mcts._rollout(node), 1.0)
+
+
+class TestCountEnemyExits(unittest.TestCase):
+    """Cambio 2: helper que cuenta las salidas libres del enemigo."""
+
+    def setUp(self):
+        self.tool = GameMoveTool()
+
+    def test_cuatro_salidas_centro(self):
+        self.assertEqual(
+            self.tool._count_enemy_exits((5, 5), set(), 10, 10),
+            4,
+        )
+
+    def test_dos_salidas_esquina(self):
+        # Esquina (0,0): solo DOWN y RIGHT estan libres.
+        self.assertEqual(
+            self.tool._count_enemy_exits((0, 0), set(), 10, 10),
+            2,
+        )
+
+    def test_cero_salidas_acorralado(self):
+        obstacles = {(1, 0), (0, 1)}
+        self.assertEqual(
+            self.tool._count_enemy_exits((0, 0), obstacles, 10, 10),
+            0,
+        )
+
+    def test_una_salida(self):
+        obstacles = {(6, 5), (4, 5), (5, 6)}
+        self.assertEqual(
+            self.tool._count_enemy_exits((5, 5), obstacles, 10, 10),
+            1,
+        )
+
+
+class TestSkipMCTSTrivialEnemy(unittest.TestCase):
+    """Cambio 2: si el enemigo esta acorralado (<=2 salidas) no se activa MCTS."""
+
+    def setUp(self):
+        self.tool = GameMoveTool()
+
+    def data(self, my_body, enemy_body=None, foods=None, cols=10, rows=10):
+        return {
+            "game_id": "game",
+            "turn_token": "token",
+            "side": "A",
+            "cols": cols,
+            "rows": rows,
+            "board": {
+                "width": cols,
+                "height": rows,
+                "my_body": my_body,
+                "enemy_body": enemy_body or [],
+                "foods": foods or [],
+            },
+        }
+
+    def test_mcts_no_se_usa_con_enemigo_acorralado(self):
+        # Enemigo en (0,0) esquina = 2 salidas -> skip MCTS -> cae a BFS.
+        # Mi cabeza en (2,0), distancia Manhattan = 2 (<=3, zona MCTS).
+        with patch.object(
+            HeadToHeadMCTS, "search", return_value="RIGHT"
+        ) as mock_search:
+            result = self.tool.execute(
+                self.data([(2, 0)], enemy_body=[(0, 0)], foods=[(9, 9)])
+            )
+        # search nunca se llama porque el enemigo esta acorralado.
+        mock_search.assert_not_called()
+        self.assertEqual(result.metadata["strategy"], "BFS_Active_Strategy")
+
+
+class TestAggressiveForaging(unittest.TestCase):
+    """Cambio 1: cosechador agresivo prioriza comida cerca del enemigo."""
+
+    def setUp(self):
+        self.tool = GameMoveTool()
+
+    def data(self, my_body, enemy_body=None, foods=None, cols=15, rows=15):
+        return {
+            "game_id": "game",
+            "turn_token": "token",
+            "side": "A",
+            "cols": cols,
+            "rows": rows,
+            "board": {
+                "width": cols,
+                "height": rows,
+                "my_body": my_body,
+                "enemy_body": enemy_body or [],
+                "foods": foods or [],
+            },
+        }
+
+    def test_foraging_activo_cuando_enemigo_lejos(self):
+        # Enemigo en (0,0), yo en (14,7). Distancia = 14 (>6).
+        # Comida A en (13,7) cerca mia; comida B en (1,1) cerca del enemigo.
+        # Con foraging agresivo, closest_food deberia ser B (cerca enemigo)
+        # y alcanzable por nosotros antes o igual que el rival.
+        result = self.tool.execute(
+            self.data(
+                [(14, 7)],
+                enemy_body=[(0, 0)],
+                foods=[(13, 7), (1, 1)],
+            )
+        )
+        # Debe ejecutarse correctamente con BFS_Active_Strategy.
+        self.assertTrue(result.success)
+        self.assertEqual(result.metadata["strategy"], "BFS_Active_Strategy")
+
+    def test_foraging_inactivo_cuando_enemigo_cerca(self):
+        # Enemigo en (5,5), yo en (7,5). Distancia = 2 (<=6) -> no foraging.
+        result = self.tool.execute(
+            self.data(
+                [(7, 5)],
+                enemy_body=[(5, 5)],
+                foods=[(8, 5), (4, 5)],
+            )
+        )
+        self.assertTrue(result.success)
+
+
+class TestEnemyProfileInference(unittest.TestCase):
+    """Cambio 4: la inferencia del perfil del rival a partir del historial."""
+
+    def setUp(self):
+        self.tool = GameMoveTool()
+
+    def test_perfil_inicia_unknown(self):
+        self.assertEqual(self.tool._enemy_profile, "unknown")
+
+    def test_perfil_sigue_unknown_con_pocas_muestras(self):
+        # Menos de _profile_min_samples (4) muestras.
+        for i in range(3):
+            self.tool._update_enemy_profile((5, 5), (i, 0))
+        self.assertEqual(self.tool._enemy_profile, "unknown")
+
+    def test_perfil_aggressive_cuando_se_acerca(self):
+        # El enemigo se acerca en todos los turnos -> aggressive.
+        # Mi cabeza fija en (5,5). Enemigo va (8,5)->(7,5)->(6,5)->(5,5).
+        positions = [(8, 5), (7, 5), (6, 5), (5, 5)]
+        for ep in positions:
+            self.tool._update_enemy_profile((5, 5), ep)
+        self.assertEqual(self.tool._enemy_profile, "aggressive")
+
+    def test_perfil_passive_cuando_no_se_acerca(self):
+        # El enemigo se aleja -> passive.
+        positions = [(5, 5), (6, 5), (7, 5), (8, 5)]
+        for ep in positions:
+            self.tool._update_enemy_profile((5, 5), ep)
+        self.assertEqual(self.tool._enemy_profile, "passive")
+
+    def test_perfil_ignora_enemy_head_none(self):
+        self.tool._update_enemy_profile((5, 5), None)
+        self.assertEqual(self.tool._enemy_profile, "unknown")
+        self.assertEqual(self.tool._enemy_head_history, [])
+
+    def test_perfil_ignora_my_head_none(self):
+        self.tool._update_enemy_profile(None, (5, 5))
+        self.assertEqual(self.tool._enemy_profile, "unknown")
+
+    def test_historial_se_acota_a_20(self):
+        for i in range(30):
+            self.tool._update_enemy_profile((5, 5), (i % 10, 0))
+        self.assertLessEqual(len(self.tool._enemy_head_history), 20)
+
+
+class TestGameMoveToolInit(unittest.TestCase):
+    """Verifica que GameMoveTool ahora tiene __init__ con estado de perfil."""
+
+    def test_init_crea_estado_perfil(self):
+        tool = GameMoveTool()
+        self.assertEqual(tool._enemy_profile, "unknown")
+        self.assertEqual(tool._enemy_head_history, [])
+        self.assertEqual(tool._my_head_history, [])
+        self.assertEqual(tool._profile_min_samples, 4)
 
 
 if __name__ == "__main__":
